@@ -3,12 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NetConfig Pro - Gestion des Configurations Réseau</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>NetConfig Pro · Tableau de bord</title>
+    
+    <!-- Fonts & Icons -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    
     <style>
         /* Variables CSS modernisées */
         :root {
@@ -53,7 +56,12 @@
             min-height: 100vh;
         }
 
-        h1, h2, h3, h4, h5, h6 {
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        h6 {
             font-weight: 700;
             font-family: var(--font-secondary);
         }
@@ -105,8 +113,12 @@
         }
 
         @keyframes shimmer {
-            0% { background-position: -200% 0; }
-            100% { background-position: 200% 0; }
+            0% {
+                background-position: -200% 0;
+            }
+            100% {
+                background-position: 200% 0;
+            }
         }
 
         .header-content {
@@ -819,51 +831,12 @@
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        /* Spinner de chargement de l'onglet */
-        .spinner-border {
-            width: 3rem;
-            height: 3rem;
-            border: 4px solid var(--border-color);
-            border-top: 4px solid var(--primary-color);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto;
-        }
-
-        .text-center {
-            text-align: center;
-        }
-
-        .py-5 {
-            padding-top: 3rem;
-            padding-bottom: 3rem;
-        }
-
-        .mt-3 {
-            margin-top: 1rem;
-        }
-
-        /* Alertes */
-        .alert {
-            padding: 1rem;
-            border-radius: var(--border-radius);
-            margin-bottom: 1rem;
-            border: 1px solid transparent;
-        }
-
-        .alert-danger {
-            color: #721c24;
-            background-color: #f8d7da;
-            border-color: #f5c6cb;
-        }
-
-        .alert h4 {
-            margin-top: 0;
-            margin-bottom: 0.5rem;
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         /* Responsive Design */
@@ -976,17 +949,15 @@
             .tab-button i {
                 font-size: 1em;
             }
-            .welcome-title {
-                font-size: 1.8rem;
-            }
         }
     </style>
 </head>
-<body>
+<body class="bg-gray-50" x-data="dashboardApp()" x-init="init()">
+
     <!-- Barre de navigation -->
     <div class="breadcrumb">
-        <a href="#"><i class="fas fa-tachometer-alt"></i> Tableau de Bord</a> &gt;
-        <strong><i class="fas fa-network-wired"></i> Gestion des Configurations Réseau</strong>
+        <a href="{{ route('dashboard') }}"><i class="fas fa-tachometer-alt"></i> Tableau de Bord</a> &gt;
+        <strong><i class="fas fa-network-wired"></i> NetConfig Pro</strong>
     </div>
 
     <!-- En-tête principal -->
@@ -1004,10 +975,12 @@
                 </div>
             </div>
             <div class="header-actions">
-                <button class="btn btn-accent" onclick="showCreateModal('site')">
+                @can('create', App\Models\Site::class)
+                <button class="btn btn-accent" @click="openCreateModal('site')">
                     <i class="fas fa-plus"></i> Nouveau Site
                 </button>
-                <button class="btn btn-outline" onclick="exportDashboard()">
+                @endcan
+                <button class="btn btn-outline" @click="exportDashboard()">
                     <i class="fas fa-download"></i> Exporter
                 </button>
             </div>
@@ -1017,1239 +990,617 @@
     <!-- Navigation par onglets -->
     <div class="tabs-navigation">
         <div class="tabs-container">
-            <button class="tab-button active" data-tab="dashboard" onclick="loadTab('dashboard')">
+            <button class="tab-button" :class="{ 'active': currentTab === 'dashboard' }" @click="switchTab('dashboard')">
                 <i class="fas fa-tachometer-alt"></i> Tableau de Bord
             </button>
-            <button class="tab-button" data-tab="sites" onclick="loadTab('sites')">
+            @can('viewAny', App\Models\Site::class)
+            <button class="tab-button" :class="{ 'active': currentTab === 'sites' }" @click="switchTab('sites')">
                 <i class="fas fa-building"></i> Sites
             </button>
-            <button class="tab-button" data-tab="switches" onclick="loadTab('switches')">
+            @endcan
+            @can('viewAny', App\Models\SwitchModel::class)
+            <button class="tab-button" :class="{ 'active': currentTab === 'switches' }" @click="switchTab('switches')">
                 <i class="fas fa-exchange-alt"></i> Switchs
             </button>
-            <button class="tab-button" data-tab="routers" onclick="loadTab('routers')">
+            @endcan
+            @can('viewAny', App\Models\Router::class)
+            <button class="tab-button" :class="{ 'active': currentTab === 'routers' }" @click="switchTab('routers')">
                 <i class="fas fa-route"></i> Routeurs
             </button>
-            <button class="tab-button" data-tab="firewalls" onclick="loadTab('firewalls')">
+            @endcan
+            @can('viewAny', App\Models\Firewall::class)
+            <button class="tab-button" :class="{ 'active': currentTab === 'firewalls' }" @click="switchTab('firewalls')">
                 <i class="fas fa-fire"></i> Firewalls
             </button>
+            @endcan
         </div>
     </div>
-
-    <!-- Contenu principal (chargé dynamiquement) -->
-    <div class="dashboard-container" id="tab-content">
-        <!-- Contenu chargé dynamiquement via JavaScript -->
-        <div id="loading" class="text-center py-5">
-            <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div>
-            <p class="mt-3">Chargement des données...</p>
-        </div>
-    </div>
-
-    <script>
-        // Variables globales
-        let currentTab = 'dashboard';
-        let isLoading = false;
-        let charts = {};
-        let chartTypes = {
-            deviceDistributionChart: 'pie',
-            availabilityChart: 'line',
-            incidentsChart: 'bar',
-            loadChart: 'line'
-        };
-
-        // Données de test (simulées - à remplacer par des appels API réels)
-        const testData = {
-            totals: {
-                devices: 184,
+    @php
+        $chartTotalsSafe = $chartTotals ?? [
+                sites: 0,
+                firewalls: 0,
+                routers: 0,
+                switches: 0,
+                devices: 0,
                 availability: 99.7,
                 avgUptime: 45,
-                incidentsToday: 3,
-                sites: 8,
-                firewalls: 42,
-                routers: 56,
-                switches: 86
-            },
-            kpis: [
-                { icon: 'fa-shield-alt', value: '99.5%', label: 'Sécurité', trend: 'up', trendValue: '+0.3%' },
-                { icon: 'fa-bolt', value: '98.2%', label: 'Performance', trend: 'stable', trendValue: '±0.1%' },
-                { icon: 'fa-hdd', value: '42', label: 'Backups Aujourd\'hui', trend: 'up', trendValue: '+5' },
-                { icon: 'fa-exclamation-circle', value: '12', label: 'Alertes Actives', trend: 'down', trendValue: '-3' },
-                { icon: 'fa-clock', value: '2.4s', label: 'Latence Moyenne', trend: 'down', trendValue: '-0.3s' },
-                { icon: 'fa-database', value: '1.2TB', label: 'Trafic Quotidien', trend: 'up', trendValue: '+120GB' }
-            ],
-            deviceDistribution: {
-                labels: ['Firewalls', 'Routeurs', 'Switchs', 'Load Balancers', 'Serveurs'],
-                data: [42, 56, 86, 12, 28],
-                colors: ['#0ea5e9', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444']
-            },
-            availabilityData: {
-                labels: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
-                data: [99.2, 99.5, 99.8, 99.7, 99.6, 99.9, 99.4]
-            },
-            incidentsData: {
-                labels: ['Connexion', 'CPU', 'Mémoire', 'Bande Passante', 'Disque'],
-                data: [12, 8, 5, 15, 3]
-            },
-            loadData: {
-                labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'],
-                firewalls: [45, 48, 62, 68, 55, 50],
-                routers: [60, 58, 72, 78, 65, 62],
-                switches: [40, 42, 55, 58, 48, 45]
-            },
-            sites: [
-                { id: 1, name: 'Siège Social', address: '123 Avenue des Champs', city: 'Paris', devices: 42, status: 'active', lastUpdate: '2024-01-15' },
-                { id: 2, name: 'Centre Data', address: '456 Rue du Serveur', city: 'Lyon', devices: 128, status: 'active', lastUpdate: '2024-01-14' },
-                { id: 3, name: 'Agence Nord', address: '789 Boulevard du Nord', city: 'Lille', devices: 28, status: 'active', lastUpdate: '2024-01-13' },
-                { id: 4, name: 'Agence Sud', address: '101 Rue du Soleil', city: 'Marseille', devices: 35, status: 'warning', lastUpdate: '2024-01-12' },
-                { id: 5, name: 'Backup Center', address: '202 Avenue de la Sécurité', city: 'Bordeaux', devices: 56, status: 'active', lastUpdate: '2024-01-11' },
-                { id: 6, name: 'Dev Lab', address: '303 Rue du Code', city: 'Toulouse', devices: 18, status: 'inactive', lastUpdate: '2024-01-10' },
-                { id: 7, name: 'QA Center', address: '404 Boulevard du Test', city: 'Nice', devices: 24, status: 'active', lastUpdate: '2024-01-09' },
-                { id: 8, name: 'DR Site', address: '505 Rue de la Redondance', city: 'Strasbourg', devices: 32, status: 'active', lastUpdate: '2024-01-08' }
-            ],
-            firewalls: [
-                { id: 1, name: 'FW-PARIS-01', site: 'Siège Social', model: 'Fortinet 600F', ip_nms: '192.168.1.1', ip_service: '192.168.1.2', status: true, security_policies_count: 128, cpu: 45, memory: 65, lastSeen: 'Il y a 5 min' },
-                { id: 2, name: 'FW-LYON-CORE', site: 'Centre Data', model: 'Palo Alto PA-3220', ip_nms: '10.0.1.1', ip_service: '10.0.1.2', status: false, security_policies_count: 256, cpu: 78, memory: 82, lastSeen: 'Il y a 12 min' },
-                { id: 3, name: 'FW-MARSEILLE-01', site: 'Agence Sud', model: 'Fortinet 400F', ip_nms: '172.16.1.1', ip_service: '172.16.1.2', status: true, security_policies_count: 96, cpu: 32, memory: 45, lastSeen: 'Il y a 3 min' },
-                { id: 4, name: 'FW-BORDEAUX-BKP', site: 'Backup Center', model: 'Cisco ASA 5525', ip_nms: '192.168.2.1', ip_service: '192.168.2.2', status: true, security_policies_count: 64, cpu: 25, memory: 38, lastSeen: 'Il y a 8 min' },
-                { id: 5, name: 'FW-LILLE-01', site: 'Agence Nord', model: 'Fortinet 200F', ip_nms: '10.10.1.1', ip_service: '10.10.1.2', status: true, security_policies_count: 48, cpu: 55, memory: 60, lastSeen: 'Il y a 2 min' }
-            ],
-            routers: [
-                { id: 1, name: 'RT-PARIS-CORE', site: 'Siège Social', brand: 'Cisco', model: 'ASR 1001-X', management_ip: '192.168.1.254', interfaces_up_count: 24, interfaces_count: 24, status: true, lastSeen: 'Il y a 4 min' },
-                { id: 2, name: 'RT-LYON-CORE', site: 'Centre Data', brand: 'Juniper', model: 'MX204', management_ip: '10.0.1.254', interfaces_up_count: 22, interfaces_count: 24, status: false, lastSeen: 'Il y a 15 min' },
-                { id: 3, name: 'RT-MARSEILLE-01', site: 'Agence Sud', brand: 'Cisco', model: 'ISR 4451', management_ip: '172.16.1.254', interfaces_up_count: 16, interfaces_count: 16, status: true, lastSeen: 'Il y a 2 min' },
-                { id: 4, name: 'RT-BORDEAUX-01', site: 'Backup Center', brand: 'Mikrotik', model: 'CCR1072', management_ip: '192.168.2.254', interfaces_up_count: 12, interfaces_count: 12, status: true, lastSeen: 'Il y a 7 min' },
-                { id: 5, name: 'RT-LILLE-EDGE', site: 'Agence Nord', brand: 'Cisco', model: 'ISR 4321', management_ip: '10.10.1.254', interfaces_up_count: 8, interfaces_count: 8, status: true, lastSeen: 'Il y a 1 min' }
-            ],
-            switches: [
-                { id: 1, name: 'SW-PARIS-CORE-01', site: 'Siège Social', model: 'Cisco Catalyst 9300', ports: '48', vlans: 24, status: 'active', lastSeen: 'Il y a 3 min' },
-                { id: 2, name: 'SW-LYON-CORE-01', site: 'Centre Data', model: 'Aruba 8325', ports: '48', vlans: 32, status: 'active', lastSeen: 'Il y a 10 min' },
-                { id: 3, name: 'SW-MARSEILLE-ACCESS', site: 'Agence Sud', model: 'Cisco Catalyst 9200', ports: '24', vlans: 12, status: 'warning', lastSeen: 'Il y a 20 min' },
-                { id: 4, name: 'SW-BORDEAUX-CORE', site: 'Backup Center', model: 'Juniper EX4300', ports: '48', vlans: 20, status: 'active', lastSeen: 'Il y a 6 min' },
-                { id: 5, name: 'SW-LILLE-ACCESS', site: 'Agence Nord', model: 'HP Aruba 2930F', ports: '24', vlans: 10, status: 'active', lastSeen: 'Il y a 2 min' }
-            ]
-        };
+                incidentsToday: 0
+            ] ;
+        $chartDataSafe = $chartData ?? [
+                deviceDistribution: [
+                    labels: ['Firewalls', 'Routeurs', 'Switchs'],
+                    data: [0, 0, 0],
+                    colors: ['#ef4444', '#10b981', '#0ea5e9']
+                ],
+                availabilityData: [
+                    labels: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
+                    data: [99.2, 99.5, 99.8, 99.7, 99.6, 99.9, 99.4]
+                ],
+                incidentsData: [
+                    labels: ['Connexion', 'CPU', 'Mémoire', 'Bande Passante', 'Disque'],
+                    data: [0, 0, 0, 0, 0]
+                ],
+                loadData: [
+                    labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'],
+                    firewalls: [45, 48, 62, 68, 55, 50],
+                    routers: [60, 58, 72, 78, 65, 62],
+                    switches: [40, 42, 55, 58, 48, 45]
+                ]
+            ];
+        @endphp
 
-        // Charger le tableau de bord au démarrage
-        document.addEventListener('DOMContentLoaded', function() {
-            loadTab('dashboard');
-        });
+    <!-- Contenu dynamique -->
+    <div class="dashboard-container">
+        <div x-show="currentTab === 'dashboard'" x-cloak>
+            @include('dashboard.partials.dashboard')
+        </div>
+        <div x-show="currentTab === 'sites'" x-cloak>
+            @include('dashboard.partials.sites')
+        </div>
+        <div x-show="currentTab === 'switches'" x-cloak>
+            @include('dashboard.partials.switches')
+        </div>
+        <div x-show="currentTab === 'routers'" x-cloak>
+            @include('dashboard.partials.routers')
+        </div>
+        <div x-show="currentTab === 'firewalls'" x-cloak>
+            @include('dashboard.partials.firewalls')
+        </div>
+    </div>
 
-        // Charger un onglet
-        async function loadTab(tabName) {
-            if (isLoading) return;
+    <!-- Modals (création, détails, configuration, test) -->
+    @include('dashboard.partials.modals')
+
+    <script>
+    function dashboardApp() {
+        return {
+            // Data from Laravel (avec valeurs par défaut pour éviter les erreurs)
+            sites: @json($sites ?? []),
+            switches: @json($switches ?? []),
+            routers: @json($routers ?? []),
+            firewalls: @json($firewalls ?? []),
+            totals: @json($totals ?? $chartTotalsSafe),
+            chartData: @json($chartData ?? $chartDataSafe),
+                },
+                availabilityData: {
+                    labels: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
+                    data: [99.2, 99.5, 99.8, 99.7, 99.6, 99.9, 99.4]
+                },
+                incidentsData: {
+                    labels: ['Connexion', 'CPU', 'Mémoire', 'Bande Passante', 'Disque'],
+                    data: [0, 0, 0, 0, 0]
+                },
+                loadData: {
+                    labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'],
+                    firewalls: [45, 48, 62, 68, 55, 50],
+                    routers: [60, 58, 72, 78, 65, 62],
+                    switches: [40, 42, 55, 58, 48, 45]
+                }
+            }),
+            permissions: @json($can ?? []),
             
-            isLoading = true;
-            currentTab = tabName;
+            charts: {},
             
-            // Mettre à jour l'onglet actif
-            document.querySelectorAll('.tab-button').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            document.querySelector(`.tab-button[data-tab="${tabName}"]`).classList.add('active');
-            
-            // Afficher le loader
-            const tabContent = document.getElementById('tab-content');
-            tabContent.innerHTML = `
-                <div id="loading" class="text-center py-5">
-                    <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div>
-                    <p class="mt-3">Chargement des données...</p>
-                </div>
-            `;
-            
-            try {
-                // Charger le contenu de l'onglet
-                let htmlContent = '';
+            // UI state
+            currentTab: 'dashboard',
+            currentModal: null,
+            modalTitle: '',
+            modalData: {},
+            formData: {},
+            filters: {
+                sites: { search: '' },
+                switches: { search: '', status: '', site: '' },
+                routers: { search: '', status: '', site: '' },
+                firewalls: { search: '', status: '', site: '' }
+            },
+
+            // Toast
+            toast: { show: false, message: '', type: 'info' },
+
+            // ------------------------------------------------------------
+            // Initialisation
+            // ------------------------------------------------------------
+            init() {
+                console.log('Dashboard App Initialized');
+                console.log('Totals:', this.totals);
+                console.log('Sites:', this.sites);
+                console.log('Firewalls:', this.firewalls);
+                console.log('Routers:', this.routers);
+                console.log('Switches:', this.switches);
                 
-                switch(tabName) {
-                    case 'dashboard':
-                        htmlContent = await loadDashboardContent();
-                        break;
-                    case 'sites':
-                        htmlContent = await loadSitesContent();
-                        break;
-                    case 'switches':
-                        htmlContent = await loadSwitchesContent();
-                        break;
-                    case 'routers':
-                        htmlContent = await loadRoutersContent();
-                        break;
-                    case 'firewalls':
-                        htmlContent = await loadFirewallsContent();
-                        break;
-                    default:
-                        htmlContent = '<div class="alert alert-danger">Onglet non trouvé</div>';
+                // Recalculer les totaux si nécessaire
+                if (this.totals.devices === 0) {
+                    this.totals.devices = this.totals.firewalls + this.totals.routers + this.totals.switches;
                 }
                 
-                // Afficher le contenu
-                tabContent.innerHTML = htmlContent;
+                // Mettre à jour les données des graphiques
+                this.updateChartData();
                 
-                // Initialiser les événements pour le nouvel onglet
-                initializeTabEvents();
+                // Initialiser les graphiques
+                this.switchTab('dashboard');
+            },
+
+            // ------------------------------------------------------------
+            // Changement d'onglet
+            // ------------------------------------------------------------
+            switchTab(tab) {
+                this.currentTab = tab;
+                if (tab === 'dashboard') {
+                    this.$nextTick(() => this.initCharts());
+                }
+            },
+
+            // ------------------------------------------------------------
+            // Mettre à jour les données des graphiques
+            // ------------------------------------------------------------
+            updateChartData() {
+                // Mettre à jour la répartition des équipements
+                this.chartData.deviceDistribution.data = [
+                    this.totals.firewalls || 0,
+                    this.totals.routers || 0,
+                    this.totals.switches || 0
+                ];
                 
-            } catch (error) {
-                console.error('Erreur lors du chargement de l\'onglet:', error);
-                tabContent.innerHTML = `
-                    <div class="alert alert-danger">
-                        <h4>Erreur de chargement</h4>
-                        <p>${error.message}</p>
-                        <button class="btn btn-primary mt-2" onclick="loadTab('${tabName}')">
-                            <i class="fas fa-redo"></i> Réessayer
-                        </button>
-                    </div>
-                `;
-            } finally {
-                isLoading = false;
-            }
-        }
+                // Mettre à jour les incidents (simulé basé sur les totaux)
+                if (this.totals.incidentsToday > 0) {
+                    this.chartData.incidentsData.data = [
+                        this.totals.incidentsToday,
+                        Math.max(0, this.totals.incidentsToday - 2),
+                        Math.max(0, this.totals.incidentsToday - 3),
+                        Math.max(0, this.totals.incidentsToday - 1),
+                        Math.max(0, this.totals.incidentsToday - 4)
+                    ];
+                }
+            },
 
-        // Charger le contenu du dashboard
-        async function loadDashboardContent() {
-            // Simuler le chargement des données API
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            return `
-                <section class="welcome-section fade-in">
-                    <div class="welcome-content">
-                        <div class="welcome-header">
-                            <div class="welcome-text">
-                                <h2 class="welcome-title">Bienvenue, Administrateur!</h2>
-                                <p class="welcome-subtitle">
-                                    Plateforme complète de gestion des configurations réseau pour simplifier l'exploitation, la maintenance et les audits techniques de votre infrastructure.
-                                </p>
-                                <div class="welcome-stats">
-                                    <div class="welcome-stat">
-                                        <div class="stat-value" id="total-sites">${testData.totals.sites}</div>
-                                        <div class="stat-label">Sites Actifs</div>
-                                    </div>
-                                    <div class="welcome-stat">
-                                        <div class="stat-value" id="total-devices">${testData.totals.devices}</div>
-                                        <div class="stat-label">Équipements</div>
-                                    </div>
-                                    <div class="welcome-stat">
-                                        <div class="stat-value" id="connectivity-rate">${testData.totals.availability}%</div>
-                                        <div class="stat-label">Disponibilité</div>
-                                    </div>
-                                    <div class="welcome-stat">
-                                        <div class="stat-value" id="incidents-today">${testData.totals.incidentsToday}</div>
-                                        <div class="stat-label">Incidents</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
+            // ------------------------------------------------------------
+            // Graphiques (Chart.js)
+            // ------------------------------------------------------------
+            initCharts() {
+                // Détruire les anciens graphiques s'ils existent
+                Object.values(this.charts).forEach(chart => chart?.destroy());
+                this.charts = {};
 
-                <section class="kpi-section fade-in">
-                    <h2 style="color: var(--header-bg); margin-bottom: 24px; font-size: 1.8rem;">
-                        <i class="fas fa-tachometer-alt"></i> Indicateurs Clés de Performance
-                    </h2>
-                    <div class="kpi-grid" id="kpi-grid">
-                        <!-- Les KPI seront chargés dynamiquement par JavaScript -->
-                    </div>
-                </section>
-
-                <section class="charts-section fade-in">
-                    <div class="chart-card">
-                        <div class="chart-header">
-                            <h3 class="chart-title">
-                                <i class="fas fa-chart-pie"></i> Répartition des Équipements
-                            </h3>
-                            <button class="btn btn-outline btn-sm" onclick="toggleChartType('deviceDistribution')">
-                                <i class="fas fa-exchange-alt"></i> Type
-                            </button>
-                        </div>
-                        <div class="chart-container">
-                            <canvas id="deviceDistributionChart"></canvas>
-                        </div>
-                    </div>
-
-                    <div class="chart-card">
-                        <div class="chart-header">
-                            <h3 class="chart-title">
-                                <i class="fas fa-chart-line"></i> Disponibilité Hebdomadaire
-                            </h3>
-                            <button class="btn btn-outline btn-sm" onclick="toggleChartType('availabilityChart')">
-                                <i class="fas fa-exchange-alt"></i> Type
-                            </button>
-                        </div>
-                        <div class="chart-container">
-                            <canvas id="availabilityChart"></canvas>
-                        </div>
-                    </div>
-
-                    <div class="chart-card">
-                        <div class="chart-header">
-                            <h3 class="chart-title">
-                                <i class="fas fa-exclamation-triangle"></i> Incidents par Type
-                            </h3>
-                            <button class="btn btn-outline btn-sm" onclick="toggleChartType('incidentsChart')">
-                                <i class="fas fa-exchange-alt"></i> Type
-                            </button>
-                        </div>
-                        <div class="chart-container">
-                            <canvas id="incidentsChart"></canvas>
-                        </div>
-                    </div>
-
-                    <div class="chart-card">
-                        <div class="chart-header">
-                            <h3 class="chart-title">
-                                <i class="fas fa-server"></i> Charge des Équipements
-                            </h3>
-                            <button class="btn btn-outline btn-sm" onclick="toggleChartType('loadChart')">
-                                <i class="fas fa-exchange-alt"></i> Type
-                            </button>
-                        </div>
-                        <div class="chart-container">
-                            <canvas id="loadChart"></canvas>
-                        </div>
-                    </div>
-                </section>
-
-                <section class="equipment-section fade-in">
-                    <div class="section-header">
-                        <h2 class="section-title">
-                            <i class="fas fa-history"></i> Activité Récente
-                        </h2>
-                        <div class="section-actions">
-                            <button class="btn btn-outline" onclick="loadAllRecentActivity()">
-                                <i class="fas fa-sync-alt"></i> Actualiser
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
-                        <div>
-                            <h4 style="color: var(--primary-color); margin-bottom: 15px;">
-                                <i class="fas fa-fire"></i> Derniers Firewalls
-                            </h4>
-                            <div id="recent-firewalls" style="max-height: 300px; overflow-y: auto;">
-                                <!-- Chargement dynamique -->
-                            </div>
-                        </div>
-                        <div>
-                            <h4 style="color: var(--primary-color); margin-bottom: 15px;">
-                                <i class="fas fa-route"></i> Derniers Routeurs
-                            </h4>
-                            <div id="recent-routers" style="max-height: 300px; overflow-y: auto;">
-                                <!-- Chargement dynamique -->
-                            </div>
-                        </div>
-                        <div>
-                            <h4 style="color: var(--primary-color); margin-bottom: 15px;">
-                                <i class="fas fa-exchange-alt"></i> Derniers Switchs
-                            </h4>
-                            <div id="recent-switches" style="max-height: 300px; overflow-y: auto;">
-                                <!-- Chargement dynamique -->
-                            </div>
-                        </div>
-                    </div>
-                </section>
-            `;
-        }
-
-        // Charger le contenu des sites
-        async function loadSitesContent() {
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            return `
-                <div class="filters-section">
-                    <div class="search-box">
-                        <i class="fas fa-search"></i>
-                        <input type="text" id="sites-search" placeholder="Rechercher un site..." onkeyup="filterSites()">
-                    </div>
-                    <div class="filter-group">
-                        <select class="filter-select" id="sites-status-filter" onchange="filterSites()">
-                            <option value="">Tous les statuts</option>
-                            <option value="active">Actif</option>
-                            <option value="warning">Avertissement</option>
-                            <option value="inactive">Inactif</option>
-                        </select>
-                        <select class="filter-select" id="sites-sort" onchange="sortSites()">
-                            <option value="name">Trier par nom</option>
-                            <option value="devices">Trier par équipements</option>
-                            <option value="city">Trier par ville</option>
-                        </select>
-                    </div>
-                </div>
-
-                <section class="equipment-section fade-in">
-                    <div class="section-header">
-                        <h2 class="section-title">
-                            <i class="fas fa-building"></i> Gestion des Sites
-                        </h2>
-                        <div class="section-actions">
-                            <span class="status-badge status-info">${testData.sites.length} sites</span>
-                            <button class="btn btn-primary" onclick="showCreateModal('site')">
-                                <i class="fas fa-plus"></i> Nouveau Site
-                            </button>
-                            <button class="btn btn-outline" onclick="exportSites()">
-                                <i class="fas fa-download"></i> Exporter
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="table-responsive">
-                        <table class="equipment-table">
-                            <thead>
-                                <tr>
-                                    <th>Nom</th>
-                                    <th>Adresse</th>
-                                    <th>Ville</th>
-                                    <th>Équipements</th>
-                                    <th>Statut</th>
-                                    <th>Dernière MAJ</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="sites-table-body">
-                                ${testData.sites.map(site => `
-                                    <tr>
-                                        <td>
-                                            <strong>${site.name}</strong><br>
-                                            <small class="text-muted">ID: ${site.id}</small>
-                                        </td>
-                                        <td>${site.address}</td>
-                                        <td>${site.city}</td>
-                                        <td>
-                                            <span class="status-badge status-info">
-                                                ${site.devices} équipements
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span class="status-badge ${site.status === 'active' ? 'status-active' : site.status === 'warning' ? 'status-warning' : 'status-danger'}">
-                                                ${site.status === 'active' ? 'Actif' : site.status === 'warning' ? 'Avertissement' : 'Inactif'}
-                                            </span>
-                                        </td>
-                                        <td>${site.lastUpdate}</td>
-                                        <td>
-                                            <div class="action-buttons">
-                                                <button class="btn btn-outline btn-sm btn-icon" title="Voir" onclick="viewSite(${site.id})">
-                                                    <i class="fas fa-eye"></i>
-                                                </button>
-                                                <button class="btn btn-outline btn-sm btn-icon" title="Éditer" onclick="editSite(${site.id})">
-                                                    <i class="fas fa-edit"></i>
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
-            `;
-        }
-
-        // Charger le contenu des switchs
-        async function loadSwitchesContent() {
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            return `
-                <div class="filters-section">
-                    <div class="search-box">
-                        <i class="fas fa-search"></i>
-                        <input type="text" id="switches-search" placeholder="Rechercher un switch..." onkeyup="filterSwitches()">
-                    </div>
-                    <div class="filter-group">
-                        <select class="filter-select" id="switches-status-filter" onchange="filterSwitches()">
-                            <option value="">Tous les statuts</option>
-                            <option value="active">Actif</option>
-                            <option value="warning">Avertissement</option>
-                            <option value="danger">Critique</option>
-                        </select>
-                        <select class="filter-select" id="switches-site-filter" onchange="filterSwitches()">
-                            <option value="">Tous les sites</option>
-                            ${[...new Set(testData.switches.map(s => s.site))].map(site => `<option value="${site}">${site}</option>`).join('')}
-                        </select>
-                    </div>
-                </div>
-
-                <section class="equipment-section fade-in">
-                    <div class="section-header">
-                        <h2 class="section-title">
-                            <i class="fas fa-exchange-alt"></i> Gestion des Switchs
-                        </h2>
-                        <div class="section-actions">
-                            <span class="status-badge status-info">${testData.switches.length} switchs</span>
-                            <button class="btn btn-primary" onclick="showCreateModal('switch')">
-                                <i class="fas fa-plus"></i> Nouveau Switch
-                            </button>
-                            <button class="btn btn-outline" onclick="exportSwitches()">
-                                <i class="fas fa-download"></i> Exporter
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="table-responsive">
-                        <table class="equipment-table">
-                            <thead>
-                                <tr>
-                                    <th>Nom</th>
-                                    <th>Site</th>
-                                    <th>Modèle</th>
-                                    <th>Ports</th>
-                                    <th>VLANs</th>
-                                    <th>Statut</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="switches-table-body">
-                                ${testData.switches.map(sw => `
-                                    <tr>
-                                        <td>
-                                            <strong>${sw.name}</strong><br>
-                                            <small class="text-muted">${sw.model}</small>
-                                        </td>
-                                        <td>${sw.site}</td>
-                                        <td>${sw.model}</td>
-                                        <td>${sw.ports}</td>
-                                        <td>
-                                            <span class="status-badge status-info">
-                                                ${sw.vlans} VLANs
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span class="status-badge ${sw.status === 'active' ? 'status-active' : sw.status === 'warning' ? 'status-warning' : 'status-danger'}">
-                                                ${sw.status === 'active' ? 'Actif' : sw.status === 'warning' ? 'Avertissement' : 'Critique'}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <div class="action-buttons">
-                                                <button class="btn btn-outline btn-sm btn-icon" title="Voir" onclick="viewSwitch(${sw.id})">
-                                                    <i class="fas fa-eye"></i>
-                                                </button>
-                                                <button class="btn btn-outline btn-sm btn-icon" title="Configurer" onclick="configureSwitch(${sw.id})">
-                                                    <i class="fas fa-cog"></i>
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
-            `;
-        }
-
-        // Charger le contenu des routeurs
-        async function loadRoutersContent() {
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            // Construire le tableau des routeurs
-            let tableRows = '';
-            if (testData.routers.length > 0) {
-                tableRows = testData.routers.map(router => `
-                    <tr>
-                        <td>
-                            <strong>${router.name}</strong><br>
-                            <small class="text-muted">${router.model}</small>
-                        </td>
-                        <td>${router.site}</td>
-                        <td>
-                            <div><code>${router.management_ip}</code></div>
-                            <small>${router.brand}</small>
-                        </td>
-                        <td>
-                            <span class="status-badge status-info">
-                                ${router.interfaces_up_count}/${router.interfaces_count}
-                            </span>
-                        </td>
-                        <td>
-                            <span class="status-badge ${router.status ? 'status-active' : 'status-danger'}">
-                                ${router.status ? 'Actif' : 'Inactif'}
-                            </span>
-                        </td>
-                        <td>
-                            <div class="action-buttons">
-                                <button class="btn btn-outline btn-sm btn-icon" title="Voir" onclick="viewRouter(${router.id})">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                <button class="btn btn-outline btn-sm btn-icon" title="Tester" onclick="testRouter(${router.id})">
-                                    <i class="fas fa-plug"></i>
-                                </button>
-                                <button class="btn btn-outline btn-sm btn-icon" title="Configurer" onclick="configureRouter(${router.id})">
-                                    <i class="fas fa-cog"></i>
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                `).join('');
-            } else {
-                tableRows = `
-                    <tr>
-                        <td colspan="6" class="text-center">
-                            <div class="py-5">
-                                <i class="fas fa-route fa-3x text-muted mb-3"></i>
-                                <p class="text-muted">Aucun routeur trouvé</p>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            }
-            
-            return `
-                <div class="filters-section">
-                    <div class="search-box">
-                        <i class="fas fa-search"></i>
-                        <input type="text" id="routers-search" placeholder="Rechercher un routeur..." onkeyup="filterRouters()">
-                    </div>
-                    <div class="filter-group">
-                        <select class="filter-select" id="routers-status-filter" onchange="filterRouters()">
-                            <option value="">Tous les statuts</option>
-                            <option value="active">Actif</option>
-                            <option value="inactive">Inactif</option>
-                        </select>
-                        <select class="filter-select" id="routers-site-filter" onchange="filterRouters()">
-                            <option value="">Tous les sites</option>
-                            ${[...new Set(testData.routers.map(r => r.site))].map(site => `<option value="${site}">${site}</option>`).join('')}
-                        </select>
-                    </div>
-                </div>
-
-                <section class="equipment-section fade-in">
-                    <div class="section-header">
-                        <h2 class="section-title">
-                            <i class="fas fa-route"></i> Gestion des Routeurs
-                        </h2>
-                        <div class="section-actions">
-                            <span class="status-badge status-info">${testData.routers.length} routeurs</span>
-                            <button class="btn btn-primary" onclick="showCreateModal('router')">
-                                <i class="fas fa-plus"></i> Nouveau Routeur
-                            </button>
-                            <button class="btn btn-outline" onclick="exportRouters()">
-                                <i class="fas fa-download"></i> Exporter
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="table-responsive">
-                        <table class="equipment-table">
-                            <thead>
-                                <tr>
-                                    <th>Nom</th>
-                                    <th>Site</th>
-                                    <th>IP Management / Marque</th>
-                                    <th>Interfaces</th>
-                                    <th>Statut</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="routers-table-body">
-                                ${tableRows}
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
-            `;
-        }
-
-        // Charger le contenu des firewalls
-        async function loadFirewallsContent() {
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            // Construire le tableau des firewalls
-            let tableRows = '';
-            if (testData.firewalls.length > 0) {
-                tableRows = testData.firewalls.map(firewall => `
-                    <tr>
-                        <td>
-                            <strong>${firewall.name}</strong><br>
-                            <small class="text-muted">${firewall.model}</small>
-                        </td>
-                        <td>${firewall.site}</td>
-                        <td>
-                            <div><code>${firewall.ip_nms}</code></div>
-                            <small><code>${firewall.ip_service}</code></small>
-                        </td>
-                        <td>
-                            <span class="status-badge ${firewall.status ? 'status-active' : 'status-danger'}">
-                                ${firewall.status ? 'Actif' : 'Inactif'}
-                            </span>
-                        </td>
-                        <td>
-                            <span class="status-badge status-info">
-                                ${firewall.security_policies_count} règles
-                            </span>
-                        </td>
-                        <td>
-                            <div class="action-buttons">
-                                <button class="btn btn-outline btn-sm btn-icon" title="Voir" onclick="viewFirewall(${firewall.id})">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                <button class="btn btn-outline btn-sm btn-icon" title="Tester" onclick="testFirewall(${firewall.id})">
-                                    <i class="fas fa-plug"></i>
-                                </button>
-                                <button class="btn btn-outline btn-sm btn-icon" title="Configurer" onclick="configureFirewall(${firewall.id})">
-                                    <i class="fas fa-cog"></i>
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                `).join('');
-            } else {
-                tableRows = `
-                    <tr>
-                        <td colspan="6" class="text-center">
-                            <div class="py-5">
-                                <i class="fas fa-fire fa-3x text-muted mb-3"></i>
-                                <p class="text-muted">Aucun firewall trouvé</p>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            }
-            
-            return `
-                <div class="filters-section">
-                    <div class="search-box">
-                        <i class="fas fa-search"></i>
-                        <input type="text" id="firewalls-search" placeholder="Rechercher un firewall..." onkeyup="filterFirewalls()">
-                    </div>
-                    <div class="filter-group">
-                        <select class="filter-select" id="firewalls-status-filter" onchange="filterFirewalls()">
-                            <option value="">Tous les statuts</option>
-                            <option value="active">Actif</option>
-                            <option value="inactive">Inactif</option>
-                        </select>
-                        <select class="filter-select" id="firewalls-site-filter" onchange="filterFirewalls()">
-                            <option value="">Tous les sites</option>
-                            ${[...new Set(testData.firewalls.map(f => f.site))].map(site => `<option value="${site}">${site}</option>`).join('')}
-                        </select>
-                    </div>
-                </div>
-
-                <section class="equipment-section fade-in">
-                    <div class="section-header">
-                        <h2 class="section-title">
-                            <i class="fas fa-fire"></i> Gestion des Firewalls
-                        </h2>
-                        <div class="section-actions">
-                            <span class="status-badge status-info">${testData.firewalls.length} firewalls</span>
-                            <button class="btn btn-primary" onclick="showCreateModal('firewall')">
-                                <i class="fas fa-plus"></i> Nouveau Firewall
-                            </button>
-                            <button class="btn btn-outline" onclick="exportFirewalls()">
-                                <i class="fas fa-download"></i> Exporter
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="table-responsive">
-                        <table class="equipment-table">
-                            <thead>
-                                <tr>
-                                    <th>Nom</th>
-                                    <th>Site</th>
-                                    <th>IP NMS / SERVICE</th>
-                                    <th>Statut</th>
-                                    <th>Politiques</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="firewalls-table-body">
-                                ${tableRows}
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
-            `;
-        }
-
-        // Fonctions utilitaires
-        async function fetchData(url) {
-            // Simulation d'appel API
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            // Pour la démo, retourner les données de test
-            return {
-                success: true,
-                data: testData
-            };
-        }
-
-        function initializeTabEvents() {
-            // Initialiser les événements spécifiques à l'onglet
-            if (currentTab === 'dashboard') {
-                loadDashboardKpis();
-                initializeCharts();
-                loadRecentActivity();
-            }
-        }
-
-        // Fonctions pour le dashboard
-        async function loadDashboardKpis() {
-            try {
-                const kpiGrid = document.getElementById('kpi-grid');
-                if (!kpiGrid) return;
-                
-                // Construire les KPI
-                kpiGrid.innerHTML = `
-                    <div class="kpi-card">
-                        <div class="kpi-icon">
-                            <i class="fas fa-building"></i>
-                        </div>
-                        <div class="kpi-value">${testData.totals.sites}</div>
-                        <div class="kpi-label">Sites réseau</div>
-                        <div class="kpi-trend trend-up">
-                            <i class="fas fa-arrow-up"></i> Configuration centralisée
-                        </div>
-                    </div>
-
-                    <div class="kpi-card">
-                        <div class="kpi-icon">
-                            <i class="fas fa-fire"></i>
-                        </div>
-                        <div class="kpi-value">${testData.totals.firewalls}</div>
-                        <div class="kpi-label">Firewalls</div>
-                        <div class="kpi-trend trend-up">
-                            <i class="fas fa-arrow-up"></i> 
-                            ${Math.round((testData.firewalls.filter(f => f.status).length / testData.firewalls.length) * 100)}% actifs
-                        </div>
-                    </div>
-
-                    <div class="kpi-card">
-                        <div class="kpi-icon">
-                            <i class="fas fa-route"></i>
-                        </div>
-                        <div class="kpi-value">${testData.totals.routers}</div>
-                        <div class="kpi-label">Routeurs</div>
-                        <div class="kpi-trend trend-up">
-                            <i class="fas fa-arrow-up"></i> 
-                            ${Math.round((testData.routers.filter(r => r.status).length / testData.routers.length) * 100)}% actifs
-                        </div>
-                    </div>
-
-                    <div class="kpi-card">
-                        <div class="kpi-icon">
-                            <i class="fas fa-exchange-alt"></i>
-                        </div>
-                        <div class="kpi-value">${testData.totals.switches}</div>
-                        <div class="kpi-label">Switchs</div>
-                        <div class="kpi-trend">
-                            <i class="fas fa-minus"></i> Gestion VLAN
-                        </div>
-                    </div>
-
-                    <div class="kpi-card">
-                        <div class="kpi-icon">
-                            <i class="fas fa-save"></i>
-                        </div>
-                        <div class="kpi-value">12</div>
-                        <div class="kpi-label">Backups nécessaires</div>
-                        <div class="kpi-trend trend-down">
-                            <i class="fas fa-arrow-down"></i> À planifier
-                        </div>
-                    </div>
-
-                    <div class="kpi-card">
-                        <div class="kpi-icon">
-                            <i class="fas fa-bolt"></i>
-                        </div>
-                        <div class="kpi-value">${testData.totals.availability}%</div>
-                        <div class="kpi-label">Disponibilité</div>
-                        <div class="kpi-trend ${testData.totals.availability > 95 ? 'trend-up' : (testData.totals.availability > 80 ? '' : 'trend-down')}">
-                            <i class="fas fa-${testData.totals.availability > 95 ? 'arrow-up' : (testData.totals.availability > 80 ? 'minus' : 'arrow-down')}"></i> 
-                            Taux de connectivité global
-                        </div>
-                    </div>
-                `;
-                
-            } catch (error) {
-                console.error('Erreur lors du chargement des KPI:', error);
-            }
-        }
-
-        // Initialiser les graphiques
-        function initializeCharts() {
-            // Graphique de répartition des équipements
-            const deviceCtx = document.getElementById('deviceDistributionChart')?.getContext('2d');
-            if (deviceCtx) {
-                charts.deviceDistribution = new Chart(deviceCtx, {
-                    type: 'pie',
-                    data: {
-                        labels: testData.deviceDistribution.labels,
-                        datasets: [{
-                            data: testData.deviceDistribution.data,
-                            backgroundColor: testData.deviceDistribution.colors,
-                            borderWidth: 2,
-                            borderColor: '#ffffff'
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'right',
-                                labels: {
-                                    padding: 20,
-                                    usePointStyle: true,
-                                    font: {
-                                        family: 'Inter, sans-serif',
-                                        size: 12
+                // Répartition des équipements
+                const ctx1 = document.getElementById('deviceDistributionChart')?.getContext('2d');
+                if (ctx1) {
+                    this.charts.deviceDistribution = new Chart(ctx1, {
+                        type: 'pie',
+                        data: {
+                            labels: this.chartData.deviceDistribution.labels,
+                            datasets: [{
+                                data: this.chartData.deviceDistribution.data,
+                                backgroundColor: this.chartData.deviceDistribution.colors,
+                                borderWidth: 2,
+                                borderColor: '#ffffff'
+                            }]
+                        },
+                        options: { 
+                            responsive: true, 
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'right',
+                                    labels: {
+                                        padding: 20,
+                                        usePointStyle: true,
+                                        font: {
+                                            family: 'Inter, sans-serif',
+                                            size: 12
+                                        }
+                                    }
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            const label = context.label || '';
+                                            const value = context.raw || 0;
+                                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                            const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                                            return `${label}: ${value} (${percentage}%)`;
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                });
-            }
+                    });
+                }
 
-            // Graphique de disponibilité
-            const availabilityCtx = document.getElementById('availabilityChart')?.getContext('2d');
-            if (availabilityCtx) {
-                charts.availability = new Chart(availabilityCtx, {
-                    type: 'line',
-                    data: {
-                        labels: testData.availabilityData.labels,
-                        datasets: [{
-                            label: 'Disponibilité (%)',
-                            data: testData.availabilityData.data,
-                            borderColor: '#0ea5e9',
-                            backgroundColor: 'rgba(14, 165, 233, 0.1)',
-                            borderWidth: 3,
-                            fill: true,
-                            tension: 0.4
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: {
-                                beginAtZero: false,
-                                min: 98,
-                                max: 100,
-                                ticks: {
-                                    callback: function(value) {
-                                        return value + '%';
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Graphique des incidents
-            const incidentsCtx = document.getElementById('incidentsChart')?.getContext('2d');
-            if (incidentsCtx) {
-                charts.incidents = new Chart(incidentsCtx, {
-                    type: 'bar',
-                    data: {
-                        labels: testData.incidentsData.labels,
-                        datasets: [{
-                            label: 'Nombre d\'Incidents',
-                            data: testData.incidentsData.data,
-                            backgroundColor: [
-                                '#ef4444',
-                                '#f59e0b',
-                                '#0ea5e9',
-                                '#10b981',
-                                '#8b5cf6'
-                            ]
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false
-                    }
-                });
-            }
-
-            // Graphique de charge
-            const loadCtx = document.getElementById('loadChart')?.getContext('2d');
-            if (loadCtx) {
-                charts.load = new Chart(loadCtx, {
-                    type: 'line',
-                    data: {
-                        labels: testData.loadData.labels,
-                        datasets: [
-                            {
-                                label: 'Firewalls',
-                                data: testData.loadData.firewalls,
-                                borderColor: '#ef4444',
-                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                                borderWidth: 2,
-                                tension: 0.4
-                            },
-                            {
-                                label: 'Routeurs',
-                                data: testData.loadData.routers,
-                                borderColor: '#10b981',
-                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                                borderWidth: 2,
-                                tension: 0.4
-                            },
-                            {
-                                label: 'Switchs',
-                                data: testData.loadData.switches,
+                // Disponibilité hebdomadaire
+                const ctx2 = document.getElementById('availabilityChart')?.getContext('2d');
+                if (ctx2) {
+                    this.charts.availability = new Chart(ctx2, {
+                        type: 'line',
+                        data: {
+                            labels: this.chartData.availabilityData.labels,
+                            datasets: [{
+                                label: 'Disponibilité (%)',
+                                data: this.chartData.availabilityData.data,
                                 borderColor: '#0ea5e9',
-                                backgroundColor: 'rgba(14, 165, 233, 0.1)',
-                                borderWidth: 2,
+                                backgroundColor: 'rgba(14,165,233,0.1)',
+                                borderWidth: 3,
+                                fill: true,
                                 tension: 0.4
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                max: 100,
-                                ticks: {
-                                    callback: function(value) {
-                                        return value + '%';
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: { 
+                                y: { 
+                                    beginAtZero: false, 
+                                    min: 98, 
+                                    max: 100,
+                                    ticks: {
+                                        callback: function(value) {
+                                            return value + '%';
+                                        }
                                     }
+                                } 
+                            }
+                        }
+                    });
+                }
+
+                // Incidents
+                const ctx3 = document.getElementById('incidentsChart')?.getContext('2d');
+                if (ctx3) {
+                    this.charts.incidents = new Chart(ctx3, {
+                        type: 'bar',
+                        data: {
+                            labels: this.chartData.incidentsData.labels,
+                            datasets: [{
+                                label: "Nombre d'incidents",
+                                data: this.chartData.incidentsData.data,
+                                backgroundColor: ['#ef4444','#f59e0b','#0ea5e9','#10b981','#8b5cf6']
+                            }]
+                        },
+                        options: { 
+                            responsive: true, 
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true
                                 }
                             }
                         }
-                    }
-                });
-            }
-        }
+                    });
+                }
 
-        // Charger l'activité récente
-        function loadRecentActivity() {
-            // Firewalls récents
-            const recentFirewalls = document.getElementById('recent-firewalls');
-            if (recentFirewalls) {
-                recentFirewalls.innerHTML = testData.firewalls.map(fw => {
-                    const statusClass = fw.status ? 'status-active' : 'status-danger';
-                    return `
-                        <div style="padding: 10px; border-bottom: 1px solid var(--border-color);">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <strong>${fw.name}</strong>
-                                    <div style="font-size: 0.85rem; color: var(--text-light);">
-                                        ${fw.site} • ${fw.model}
-                                    </div>
-                                </div>
-                                <span class="status-badge ${statusClass}" style="font-size: 0.7rem;">
-                                    ${fw.status ? 'Actif' : 'Inactif'}
-                                </span>
-                            </div>
-                            <div style="font-size: 0.8rem; color: var(--text-light); margin-top: 5px;">
-                                <i class="fas fa-clock"></i> ${fw.lastSeen}
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-            }
+                // Charge des équipements
+                const ctx4 = document.getElementById('loadChart')?.getContext('2d');
+                if (ctx4) {
+                    this.charts.load = new Chart(ctx4, {
+                        type: 'line',
+                        data: {
+                            labels: this.chartData.loadData.labels,
+                            datasets: [
+                                { 
+                                    label: 'Firewalls', 
+                                    data: this.chartData.loadData.firewalls, 
+                                    borderColor: '#ef4444', 
+                                    backgroundColor: 'rgba(239,68,68,0.1)', 
+                                    borderWidth: 2,
+                                    tension: 0.4 
+                                },
+                                { 
+                                    label: 'Routeurs', 
+                                    data: this.chartData.loadData.routers, 
+                                    borderColor: '#10b981', 
+                                    backgroundColor: 'rgba(16,185,129,0.1)', 
+                                    borderWidth: 2,
+                                    tension: 0.4 
+                                },
+                                { 
+                                    label: 'Switchs', 
+                                    data: this.chartData.loadData.switches, 
+                                    borderColor: '#0ea5e9', 
+                                    backgroundColor: 'rgba(14,165,233,0.1)', 
+                                    borderWidth: 2,
+                                    tension: 0.4 
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: { 
+                                y: { 
+                                    beginAtZero: true, 
+                                    max: 100,
+                                    ticks: {
+                                        callback: function(value) {
+                                            return value + '%';
+                                        }
+                                    }
+                                } 
+                            }
+                        }
+                    });
+                }
+            },
 
-            // Routeurs récents
-            const recentRouters = document.getElementById('recent-routers');
-            if (recentRouters) {
-                recentRouters.innerHTML = testData.routers.map(rt => {
-                    const statusClass = rt.status ? 'status-active' : 'status-danger';
-                    return `
-                        <div style="padding: 10px; border-bottom: 1px solid var(--border-color);">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <strong>${rt.name}</strong>
-                                    <div style="font-size: 0.85rem; color: var(--text-light);">
-                                        ${rt.site} • ${rt.model}
-                                    </div>
-                                </div>
-                                <span class="status-badge ${statusClass}" style="font-size: 0.7rem;">
-                                    ${rt.status ? 'Actif' : 'Inactif'}
-                                </span>
-                            </div>
-                            <div style="font-size: 0.8rem; color: var(--text-light); margin-top: 5px;">
-                                <i class="fas fa-clock"></i> ${rt.lastSeen}
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-            }
-
-            // Switchs récents
-            const recentSwitches = document.getElementById('recent-switches');
-            if (recentSwitches) {
-                recentSwitches.innerHTML = testData.switches.map(sw => {
-                    const statusClass = sw.status === 'active' ? 'status-active' : sw.status === 'warning' ? 'status-warning' : 'status-danger';
-                    return `
-                        <div style="padding: 10px; border-bottom: 1px solid var(--border-color);">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <strong>${sw.name}</strong>
-                                    <div style="font-size: 0.85rem; color: var(--text-light);">
-                                        ${sw.site} • ${sw.model}
-                                    </div>
-                                </div>
-                                <span class="status-badge ${statusClass}" style="font-size: 0.7rem;">
-                                    ${sw.status === 'active' ? 'Actif' : sw.status === 'warning' ? 'Avertissement' : 'Critique'}
-                                </span>
-                            </div>
-                            <div style="font-size: 0.8rem; color: var(--text-light); margin-top: 5px;">
-                                <i class="fas fa-clock"></i> ${sw.lastSeen}
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-            }
-        }
-
-        // Fonctions utilitaires pour les actions
-        function viewFirewall(id) {
-            alert(`Voir les détails du firewall ${id}`);
-        }
-
-        function testFirewall(id) {
-            alert(`Test de connectivité du firewall ${id} - Simulation en cours...`);
-        }
-
-        function configureFirewall(id) {
-            alert(`Configuration du firewall ${id}`);
-        }
-
-        function viewRouter(id) {
-            alert(`Voir les détails du routeur ${id}`);
-        }
-
-        function testRouter(id) {
-            alert(`Test de connectivité du routeur ${id} - Simulation en cours...`);
-        }
-
-        function configureRouter(id) {
-            alert(`Configuration du routeur ${id}`);
-        }
-
-        function viewSwitch(id) {
-            alert(`Voir les détails du switch ${id}`);
-        }
-
-        function configureSwitch(id) {
-            alert(`Configuration du switch ${id}`);
-        }
-
-        function viewSite(id) {
-            alert(`Voir les détails du site ${id}`);
-        }
-
-        function editSite(id) {
-            alert(`Éditer le site ${id}`);
-        }
-
-        // Fonctions de filtrage (simplifiées pour la démo)
-        function filterSites() {
-            console.log('Filtrage des sites');
-        }
-
-        function filterFirewalls() {
-            console.log('Filtrage des firewalls');
-        }
-
-        function filterRouters() {
-            console.log('Filtrage des routeurs');
-        }
-
-        function filterSwitches() {
-            console.log('Filtrage des switchs');
-        }
-
-        function sortSites() {
-            console.log('Tri des sites');
-        }
-
-        // Changer le type de graphique
-        function toggleChartType(chartId) {
-            const chartName = chartId.replace('Chart', '');
-            const chart = charts[chartName];
-            
-            if (chart) {
+            // ------------------------------------------------------------
+            // Toggle Chart Type
+            // ------------------------------------------------------------
+            toggleChartType(chartId) {
+                if (!this.charts[chartId]) {
+                    console.error('Chart not found:', chartId);
+                    return;
+                }
+                
+                const chart = this.charts[chartId];
                 const currentType = chart.config.type;
-                const newType = currentType === 'pie' ? 'bar' : 
-                              currentType === 'bar' ? 'line' : 
-                              currentType === 'line' ? 'pie' : 'bar';
+                let newType = 'bar';
+                
+                if (currentType === 'bar') {
+                    newType = 'line';
+                } else if (currentType === 'line') {
+                    newType = 'pie';
+                } else {
+                    newType = 'bar';
+                }
                 
                 chart.config.type = newType;
                 chart.update();
                 
-                // Mettre à jour le bouton
-                const btn = event.target.closest('button');
-                const icon = btn.querySelector('i');
-                icon.className = newType === 'pie' ? 'fas fa-chart-pie' :
-                                newType === 'bar' ? 'fas fa-chart-bar' :
-                                'fas fa-chart-line';
-            }
-        }
+                this.showToast(`Graphique changé en ${newType}`, 'info');
+            },
 
-        // Charger tous les équipements récents
-        function loadAllRecentActivity() {
-            loadRecentActivity();
-            showNotification('Activité récente actualisée', 'success');
-        }
-
-        // Exporter les données
-        function exportDashboard() {
-            alert('Export du dashboard en cours...');
-        }
-
-        function exportFirewalls() {
-            alert('Export des firewalls en cours...');
-        }
-
-        function exportRouters() {
-            alert('Export des routeurs en cours...');
-        }
-
-        function exportSwitches() {
-            alert('Export des switchs en cours...');
-        }
-
-        function exportSites() {
-            alert('Export des sites en cours...');
-        }
-
-        // Afficher une notification
-        function showNotification(message, type) {
-            const notification = document.createElement('div');
-            notification.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                padding: 15px 20px;
-                background: ${type === 'success' ? '#10b981' : '#ef4444'};
-                color: white;
-                border-radius: var(--border-radius);
-                box-shadow: var(--card-shadow);
-                z-index: 1000;
-                animation: fadeIn 0.3s ease;
-                font-weight: 600;
-            `;
-            notification.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${message}`;
-            document.body.appendChild(notification);
+            // ------------------------------------------------------------
+            // Filtres
+            // ------------------------------------------------------------
+            get filteredSites() {
+                return this.sites.filter(s => {
+                    if (!this.filters.sites.search) return true;
+                    const search = this.filters.sites.search.toLowerCase();
+                    return (s.name?.toLowerCase() || '').includes(search)
+                        || (s.address?.toLowerCase() || '').includes(search)
+                        || (s.city?.toLowerCase() || '').includes(search);
+                });
+            },
             
-            setTimeout(() => {
-                notification.style.animation = 'fadeIn 0.3s ease reverse';
-                setTimeout(() => {
-                    document.body.removeChild(notification);
-                }, 300);
-            }, 3000);
-        }
+            get filteredSwitches() {
+                return this.switches.filter(sw => {
+                    if (this.filters.switches.search && !(sw.name?.toLowerCase() || '').includes(this.filters.switches.search.toLowerCase())) return false;
+                    if (this.filters.switches.status && sw.status !== this.filters.switches.status) return false;
+                    if (this.filters.switches.site && sw.site !== this.filters.switches.site) return false;
+                    return true;
+                });
+            },
+            
+            get filteredRouters() {
+                return this.routers.filter(rt => {
+                    if (this.filters.routers.search && !(rt.name?.toLowerCase() || '').includes(this.filters.routers.search.toLowerCase())) return false;
+                    if (this.filters.routers.status && ((this.filters.routers.status === 'active' && !rt.status) || (this.filters.routers.status === 'inactive' && rt.status))) return false;
+                    if (this.filters.routers.site && rt.site !== this.filters.routers.site) return false;
+                    return true;
+                });
+            },
+            
+            get filteredFirewalls() {
+                return this.firewalls.filter(fw => {
+                    if (this.filters.firewalls.search && !(fw.name?.toLowerCase() || '').includes(this.filters.firewalls.search.toLowerCase())) return false;
+                    if (this.filters.firewalls.status && ((this.filters.firewalls.status === 'active' && !fw.status) || (this.filters.firewalls.status === 'inactive' && fw.status))) return false;
+                    if (this.filters.firewalls.site && fw.site !== this.filters.firewalls.site) return false;
+                    return true;
+                });
+            },
 
-        // Simulation de données en temps réel
-        setInterval(() => {
-            if (currentTab === 'dashboard') {
-                // Mettre à jour un KPI aléatoire
-                const randomIndex = Math.floor(Math.random() * testData.kpis.length);
-                const kpi = testData.kpis[randomIndex];
-                
-                if (kpi.label.includes('%')) {
-                    const currentValue = parseFloat(kpi.value);
-                    const change = (Math.random() - 0.5) * 0.2;
-                    kpi.value = (currentValue + change).toFixed(1) + '%';
-                    kpi.trend = change > 0 ? 'up' : change < 0 ? 'down' : 'stable';
-                    kpi.trendValue = `${change > 0 ? '+' : ''}${change.toFixed(1)}%`;
+            // ------------------------------------------------------------
+            // API request helper
+            // ------------------------------------------------------------
+            async apiRequest(url, method = 'GET', data = null) {
+                const options = {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                        'Accept': 'application/json'
+                    }
+                };
+                if (data) options.body = JSON.stringify(data);
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return await response.json();
+                } catch (error) {
+                    console.error('API Error:', error);
+                    this.showToast('Erreur de communication avec le serveur', 'danger');
+                    throw error;
                 }
-                
-                // Recharger les KPI
-                loadDashboardKpis();
+            },
+
+            // ------------------------------------------------------------
+            // Création / Édition
+            // ------------------------------------------------------------
+            openCreateModal(type) {
+                this.currentModal = 'create';
+                this.modalTitle = `Nouveau ${this.getTypeLabel(type)}`;
+                this.modalData = { type };
+                this.formData = this.getEmptyForm(type);
+                this.showModal('createEquipmentModal');
+            },
+
+            getEmptyForm(type) {
+                const base = {
+                    name: '', site_id: '', model: '', brand: '',
+                    ip_nms: '', vlan_nms: '', ip_service: '', vlan_service: '',
+                    configuration: ''
+                };
+                if (type === 'switch') {
+                    return { ...base, ports: 24, vlans: 10 };
+                }
+                if (type === 'router') {
+                    return { ...base, management_ip: '', interfaces_count: 24, interfaces_up_count: 22 };
+                }
+                if (type === 'firewall') {
+                    return { ...base, security_policies_count: 0, cpu: 0, memory: 0 };
+                }
+                return base;
+            },
+
+            getTypeLabel(type) {
+                const labels = { site: 'Site', switch: 'Switch', router: 'Routeur', firewall: 'Firewall' };
+                return labels[type] || type;
+            },
+
+            async saveEquipment() {
+                let url = '', resource = '';
+                const type = this.modalData.type;
+                if (type === 'switch') {
+                    url = '/api/switches';
+                    resource = 'switches';
+                } else if (type === 'router') {
+                    url = '/api/routers';
+                    resource = 'routers';
+                } else if (type === 'firewall') {
+                    url = '/api/firewalls';
+                    resource = 'firewalls';
+                } else {
+                    return;
+                }
+
+                const method = this.modalData.id ? 'PUT' : 'POST';
+                if (method === 'PUT') url = `${url}/${this.modalData.id}`;
+
+                try {
+                    const result = await this.apiRequest(url, method, this.formData);
+                    if (result.success || result.data) {
+                        const newItem = result.data || result;
+                        if (method === 'POST') {
+                            this[resource].push(newItem);
+                        } else {
+                            const index = this[resource].findIndex(i => i.id === this.modalData.id);
+                            if (index !== -1) this[resource][index] = newItem;
+                        }
+                        this.showToast(`${this.getTypeLabel(type)} ${method === 'POST' ? 'créé' : 'mis à jour'} avec succès`, 'success');
+                        this.closeModal('createEquipmentModal');
+                    }
+                } catch (e) {
+                    console.error('Save error:', e);
+                }
+            },
+
+            // ------------------------------------------------------------
+            // Visualisation
+            // ------------------------------------------------------------
+            viewItem(type, id) {
+                const item = this[type].find(i => i.id === id);
+                if (!item) return;
+                this.currentModal = 'view';
+                this.modalTitle = `Détails du ${this.getTypeLabel(type.slice(0,-1))}: ${item.name}`;
+                this.modalData = { type: type.slice(0,-1), item };
+                this.showModal('viewEquipmentModal');
+            },
+
+            renderDetails() {
+                const item = this.modalData.item;
+                if (!item) return '';
+                let html = '<div class="equipment-details">';
+                html += `<div class="detail-section"><h4><i class="fas fa-info-circle"></i> Informations générales</h4><div class="detail-grid">`;
+                html += `<div class="detail-item"><span class="detail-label">Nom</span><span class="detail-value">${item.name}</span></div>`;
+                html += `<div class="detail-item"><span class="detail-label">Site</span><span class="detail-value">${item.site || 'N/A'}</span></div>`;
+                html += `<div class="detail-item"><span class="detail-label">Modèle</span><span class="detail-value">${item.model || 'N/A'}</span></div>`;
+                html += `<div class="detail-item"><span class="detail-label">Statut</span><span class="status-badge ${item.status ? 'status-active' : 'status-danger'}">${item.status ? 'Actif' : 'Inactif'}</span></div>`;
+                html += `</div></div>`;
+                html += `<div class="detail-section"><h4><i class="fas fa-network-wired"></i> Configuration réseau</h4><div class="detail-grid">`;
+                html += `<div class="detail-item"><span class="detail-label">IP NMS</span><span class="detail-value code">${item.ip_nms || 'N/A'} (VLAN ${item.vlan_nms || 'N/A'})</span></div>`;
+                html += `<div class="detail-item"><span class="detail-label">IP Service</span><span class="detail-value code">${item.ip_service || 'N/A'} (VLAN ${item.vlan_service || 'N/A'})</span></div>`;
+                if (item.management_ip) {
+                    html += `<div class="detail-item"><span class="detail-label">IP Management</span><span class="detail-value code">${item.management_ip}</span></div>`;
+                }
+                html += `</div></div>`;
+                if (item.security_policies_count !== undefined) {
+                    html += `<div class="detail-section"><h4><i class="fas fa-shield-alt"></i> Politiques de sécurité</h4><span class="detail-value">${item.security_policies_count}</span></div>`;
+                }
+                if (item.ports) {
+                    html += `<div class="detail-section"><h4><i class="fas fa-plug"></i> Ports / VLANs</h4><span class="detail-value">${item.ports} ports, ${item.vlans || 0} VLANs</span></div>`;
+                }
+                if (item.interfaces_count) {
+                    html += `<div class="detail-section"><h4><i class="fas fa-ethernet"></i> Interfaces</h4><span class="detail-value">${item.interfaces_up_count}/${item.interfaces_count} actives</span></div>`;
+                }
+                if (item.cpu !== undefined) {
+                    html += `<div class="detail-section"><h4><i class="fas fa-chart-line"></i> Performance</h4><div class="detail-grid">`;
+                    html += `<div class="detail-item"><span class="detail-label">CPU</span><span class="detail-value">${item.cpu}%</span></div>`;
+                    html += `<div class="detail-item"><span class="detail-label">Mémoire</span><span class="detail-value">${item.memory}%</span></div>`;
+                    html += `</div></div>`;
+                }
+                html += '</div>';
+                return html;
+            },
+
+            // ------------------------------------------------------------
+            // Suppression
+            // ------------------------------------------------------------
+            async deleteItem(type, id) {
+                if (!confirm(`Supprimer cet élément ?`)) return;
+                let url = '';
+                if (type === 'sites') url = `/api/sites/${id}`;
+                else if (type === 'switches') url = `/api/switches/${id}`;
+                else if (type === 'routers') url = `/api/routers/${id}`;
+                else if (type === 'firewalls') url = `/api/firewalls/${id}`;
+                if (!url) return;
+                try {
+                    const result = await this.apiRequest(url, 'DELETE');
+                    if (result.success) {
+                        this[type] = this[type].filter(i => i.id !== id);
+                        this.showToast('Suppression réussie', 'success');
+                    }
+                } catch (e) {
+                    console.error('Delete error:', e);
+                }
+            },
+
+            // ------------------------------------------------------------
+            // Gestion des modals
+            // ------------------------------------------------------------
+            showModal(modalId) {
+                const modal = document.getElementById(modalId);
+                if (modal) {
+                    modal.style.display = 'flex';
+                }
+            },
+            
+            closeModal(modalId) {
+                const modal = document.getElementById(modalId);
+                if (modal) {
+                    modal.style.display = 'none';
+                }
+                this.currentModal = null;
+                this.modalData = {};
+                this.formData = {};
+            },
+
+            // ------------------------------------------------------------
+            // Toast
+            // ------------------------------------------------------------
+            showToast(message, type = 'success') {
+                this.toast = { show: true, message, type };
+                setTimeout(() => { this.toast.show = false; }, 3000);
             }
-        }, 15000); // Toutes les 15 secondes
-    </script>
+        };
+    }
+</script>
 </body>
 </html>

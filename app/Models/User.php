@@ -50,4 +50,31 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    public function hasRole(string $role): bool
+    {
+        return $this->role === $role;
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    public function sites()
+{
+    return $this->belongsToMany(Site::class);
+}
+
+/**
+ * Vérifie si l'utilisateur a l'un des rôles spécifiés
+ *
+ * @param array $roles
+ * @return bool
+ */
+public function hasAnyRole(array $roles): bool
+{
+    return in_array($this->role, $roles);
+}
+
 }

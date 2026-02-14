@@ -43,7 +43,7 @@ class RouterPolicy
     /**
      * Déterminer si l'utilisateur peut supprimer un routeur
      */
-    public function delete(User $user, Router $router): bool
+    public function delete(User $user, Router $router = null): bool
     {
         return $user->hasRole('admin');
     }

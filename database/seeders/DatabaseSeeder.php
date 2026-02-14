@@ -34,6 +34,8 @@ class DatabaseSeeder extends Seeder
             SwitchSeeder::class,
             ConfigurationHistorySeeder::class,
             AccessLogSeeder::class,
+            AlertSeeder::class,
+            BackupSeeder::class,
         ]);
     }
 }

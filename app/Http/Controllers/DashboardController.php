@@ -3,11 +3,14 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Site;
 use App\Models\SwitchModel;
 use App\Models\Router;
 use App\Models\Firewall;
+use App\Models\Alert;
+use App\Models\Backup;
 
 class DashboardController extends Controller
 {
@@ -19,25 +22,93 @@ class DashboardController extends Controller
     /**
      * Afficher le tableau de bord principal
      */
-    public function index()
+   public function index()
     {
         $user = Auth::user();
+
+        if (!$user) {
+            return redirect()->route('login');
+        }
+
+
+        // ------------------------------------------------------------
+        // 1. Récupération des données avec filtrage automatique via Policies
+        // ------------------------------------------------------------
         
-        // Récupérer les données de base nécessaires pour le dashboard
-        $baseData = [
-            'user' => [
-                'name' => $user->name,
-                'email' => $user->email,
-                'role' => $user->role,
-            ],
-            'sites_count' => Site::count(),
-            'switches_count' => SwitchModel::count(),
-            'routers_count' => Router::count(),
-            'firewalls_count' => Firewall::count(),
-            'recent_updates' => $this->getRecentUpdates(),
+        // Sites – si l'utilisateur peut voir la liste
+        $sitesCount = Gate::allows('viewAny', Site::class) 
+            ? Site::count() 
+            : $user->sites()->count(); // relation éventuelle (sites assignés)
+
+        // Switches – avec politique viewAny
+        $switchesCount = Gate::allows('viewAny', SwitchModel::class) 
+            ? SwitchModel::count() 
+            : 0; // ou filtre personnalisé
+
+        $routersCount = Gate::allows('viewAny', Router::class) 
+            ? Router::count() 
+            : 0;
+
+        $firewallsCount = Gate::allows('viewAny', Firewall::class) 
+            ? Firewall::count() 
+            : 0;
+
+        // Derniers équipements ajoutés (limité aux permissions)
+        $recentSwitches = $this->getRecentModels(SwitchModel::class);
+        $recentRouters   = $this->getRecentModels(Router::class);
+        $recentFirewalls = $this->getRecentModels(Firewall::class);
+
+        // Derniers backups
+       // Derniers backups visibles
+        $recentBackups = Backup::recent(5)
+            ->visibleForUser($user)
+            ->with('backupable')
+            ->get();
+
+        // Alertes actives visibles
+        $activeAlerts = Alert::open()
+            ->recent(5)
+            ->visibleForUser($user)
+            ->with('alertable')
+            ->get();
+
+        // État des équipements (en ligne / hors ligne)
+        $onlineStats = [
+            'switches' => SwitchModel::where('status', 'online')->count(),
+            'routers'  => Router::where('status', 'online')->count(),
+            'firewalls'=> Firewall::where('status', 'online')->count(),
         ];
-        
-        return view('dashboard.index', $baseData);
+
+        // ------------------------------------------------------------
+        // 2. Permissions pour les actions du dashboard (affichage conditionnel)
+        // ------------------------------------------------------------
+        $can = [
+            'createSite'       => Gate::allows('create', Site::class),
+            'createSwitch'     => Gate::allows('create', SwitchModel::class),
+            'createRouter'     => Gate::allows('create', Router::class),
+            'deleteRouter'     => Gate::allows('delete', Router::class),
+            'createFirewall'   => Gate::allows('create', Firewall::class),
+            'viewAnySite'      => Gate::allows('viewAny', Site::class),
+            'viewAnySwitch'    => Gate::allows('viewAny', SwitchModel::class),
+            'viewAnyRouter'    => Gate::allows('viewAny', Router::class),
+            'viewAnyFirewall'  => Gate::allows('viewAny', Firewall::class),
+            'viewAnyBackup'    => Gate::allows('viewAny', Backup::class), // si policy existe
+            'admin'            => $user->hasRole('admin'),
+        ];
+
+        return view('dashboard.index', compact(
+            'sitesCount',
+            'switchesCount',
+            'routersCount',
+            'firewallsCount',
+            'recentSwitches',
+            'recentRouters',
+            'recentFirewalls',
+            'recentBackups',
+            'activeAlerts',
+            'onlineStats',
+            'can'
+        ));
     }
 
     /**
@@ -136,5 +207,13 @@ class DashboardController extends Controller
             ->take(5);
         
         return $recentUpdates;
+    }
+
+        private function getRecentModels(string $modelClass)
+    {
+        if (!Gate::allows('viewAny', $modelClass)) {
+            return collect();
+        }
+        return $modelClass::latest()->limit(3)->get();
     }
 }

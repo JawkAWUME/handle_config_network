@@ -43,7 +43,7 @@ class FirewallPolicy
     /**
      * Déterminer si l'utilisateur peut supprimer un firewall
      */
-    public function delete(User $user, Firewall $firewall): bool
+    public function delete(User $user, Firewall $firewall=null): bool
     {
         return $user->hasRole('admin');
     }
