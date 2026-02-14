@@ -1017,36 +1017,37 @@
     </div>
     @php
         $chartTotalsSafe = $chartTotals ?? [
-                sites: 0,
-                firewalls: 0,
-                routers: 0,
-                switches: 0,
-                devices: 0,
-                availability: 99.7,
-                avgUptime: 45,
-                incidentsToday: 0
-            ] ;
-        $chartDataSafe = $chartData ?? [
-                deviceDistribution: [
-                    labels: ['Firewalls', 'Routeurs', 'Switchs'],
-                    data: [0, 0, 0],
-                    colors: ['#ef4444', '#10b981', '#0ea5e9']
-                ],
-                availabilityData: [
-                    labels: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
-                    data: [99.2, 99.5, 99.8, 99.7, 99.6, 99.9, 99.4]
-                ],
-                incidentsData: [
-                    labels: ['Connexion', 'CPU', 'Mémoire', 'Bande Passante', 'Disque'],
-                    data: [0, 0, 0, 0, 0]
-                ],
-                loadData: [
-                    labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'],
-                    firewalls: [45, 48, 62, 68, 55, 50],
-                    routers: [60, 58, 72, 78, 65, 62],
-                    switches: [40, 42, 55, 58, 48, 45]
-                ]
-            ];
+        'sites' => 0,
+        'firewalls' => 0,
+        'routers' => 0,
+        'switches' => 0,
+        'devices' => 0,
+        'availability' => 99.7,
+        'avgUptime' => 45,
+        'incidentsToday' => 0
+    ];
+    
+    $chartDataSafe = $chartData ?? [
+        'deviceDistribution' => [
+            'labels' => ['Firewalls', 'Routeurs', 'Switchs'],
+            'data' => [0, 0, 0],
+            'colors' => ['#ef4444', '#10b981', '#0ea5e9']
+        ],
+        'availabilityData' => [
+            'labels' => ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
+            'data' => [99.2, 99.5, 99.8, 99.7, 99.6, 99.9, 99.4]
+        ],
+        'incidentsData' => [
+            'labels' => ['Connexion', 'CPU', 'Mémoire', 'Bande Passante', 'Disque'],
+            'data' => [0, 0, 0, 0, 0]
+        ],
+        'loadData' => [
+            'labels' => ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'],
+            'firewalls' => [45, 48, 62, 68, 55, 50],
+            'routers' => [60, 58, 72, 78, 65, 62],
+            'switches' => [40, 42, 55, 58, 48, 45]
+        ]
+    ];
         @endphp
 
     <!-- Contenu dynamique -->
@@ -1075,28 +1076,12 @@
     function dashboardApp() {
         return {
             // Data from Laravel (avec valeurs par défaut pour éviter les erreurs)
-            sites: @json($sites ?? []),
-            switches: @json($switches ?? []),
-            routers: @json($routers ?? []),
-            firewalls: @json($firewalls ?? []),
+            sites: @json($sitesCount ?? []),
+            switches: @json($switchesCount ?? []),
+            routers: @json($routersCount ?? []),
+            firewalls: @json($firewallsCount ?? []),
             totals: @json($totals ?? $chartTotalsSafe),
             chartData: @json($chartData ?? $chartDataSafe),
-                },
-                availabilityData: {
-                    labels: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
-                    data: [99.2, 99.5, 99.8, 99.7, 99.6, 99.9, 99.4]
-                },
-                incidentsData: {
-                    labels: ['Connexion', 'CPU', 'Mémoire', 'Bande Passante', 'Disque'],
-                    data: [0, 0, 0, 0, 0]
-                },
-                loadData: {
-                    labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'],
-                    firewalls: [45, 48, 62, 68, 55, 50],
-                    routers: [60, 58, 72, 78, 65, 62],
-                    switches: [40, 42, 55, 58, 48, 45]
-                }
-            }),
             permissions: @json($can ?? []),
             
             charts: {},
@@ -1598,7 +1583,168 @@
             showToast(message, type = 'success') {
                 this.toast = { show: true, message, type };
                 setTimeout(() => { this.toast.show = false; }, 3000);
-            }
+            },
+            async testConnectivity(type, id) {
+    const item = this[type + 's']?.find(i => i.id === id);
+    if (!item) return;
+    
+    let url = '';
+    if (type === 'switch') url = `/api/switches/${id}/test-connectivity`;
+    else if (type === 'router') url = `/api/routers/${id}/test-connectivity`;
+    else if (type === 'firewall') url = `/api/firewalls/${id}/test-connectivity`;
+    
+    try {
+        const result = await this.apiRequest(url, 'POST');
+        this.currentModal = 'test';
+        this.modalTitle = `Test de connectivité: ${item.name}`;
+        this.modalData = { type, item, results: result };
+        this.showModal('testConnectivityModal');
+    } catch (e) {
+        console.error('Test connectivity error:', e);
+    }
+},
+
+renderTestResults() {
+    const results = this.modalData.results || {};
+    const item = this.modalData.item || {};
+    
+    return `
+        <div style="text-align: center; margin-bottom: 20px;">
+            <h4 style="color: var(--primary-color); margin-bottom: 10px;">
+                <i class="fas fa-network-wired"></i> Test de connectivité: ${item.name || 'Équipement'}
+            </h4>
+            <p style="color: var(--text-light);">Simulation des tests en cours...</p>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px; background: #f8fafc; border-radius: var(--border-radius); margin-bottom: 10px;">
+                <div>
+                    <strong>Ping IP NMS</strong>
+                    <div style="font-size: 0.9rem; color: var(--text-light);">${item.ip_nms || 'N/A'}</div>
+                </div>
+                <span class="status-badge status-active" style="background: var(--success-color); color: white;">
+                    <i class="fas fa-check"></i> Succès
+                </span>
+            </div>
+            
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px; background: #f8fafc; border-radius: var(--border-radius); margin-bottom: 10px;">
+                <div>
+                    <strong>Ping IP Service</strong>
+                    <div style="font-size: 0.9rem; color: var(--text-light);">${item.ip_service || 'N/A'}</div>
+                </div>
+                <span class="status-badge status-active" style="background: var(--success-color); color: white;">
+                    <i class="fas fa-check"></i> Succès
+                </span>
+            </div>
+            
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px; background: #f8fafc; border-radius: var(--border-radius); margin-bottom: 10px;">
+                <div>
+                    <strong>Test d'authentification</strong>
+                    <div style="font-size: 0.9rem; color: var(--text-light);">Accès SSH/API</div>
+                </div>
+                <span class="status-badge status-active" style="background: var(--success-color); color: white;">
+                    <i class="fas fa-check"></i> Succès
+                </span>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-top: 20px;">
+            <p style="color: var(--text-light); font-size: 0.9rem;">
+                <i class="fas fa-info-circle"></i> 
+                Ces résultats sont simulés. En production, des tests réels seraient effectués.
+            </p>
+        </div>
+    `;
+},
+
+// ------------------------------------------------------------
+// Configuration spécifique
+// ------------------------------------------------------------
+configurePorts(switchId) {
+    const item = this.switches.find(s => s.id === switchId);
+    if (!item) return;
+    this.currentModal = 'configurePorts';
+    this.modalTitle = `Configuration des ports: ${item.name}`;
+    this.modalData = { type: 'switch', item };
+    this.formData = { portConfiguration: '' };
+    this.showModal('configurePortsModal');
+},
+
+async savePortConfiguration() {
+    const { item } = this.modalData;
+    const url = `/api/switches/${item.id}/port-configuration`;
+    try {
+        await this.apiRequest(url, 'POST', { configuration: this.formData.portConfiguration });
+        this.showToast('Configuration des ports mise à jour', 'success');
+        this.closeModal('configurePortsModal');
+    } catch (e) {
+        console.error('Port configuration error:', e);
+    }
+},
+
+updateInterfaces(routerId) {
+    const item = this.routers.find(r => r.id === routerId);
+    if (!item) return;
+    this.currentModal = 'updateInterfaces';
+    this.modalTitle = `Mise à jour des interfaces: ${item.name}`;
+    this.modalData = { type: 'router', item };
+    this.formData = { interfacesConfig: '' };
+    this.showModal('updateInterfacesModal');
+},
+
+async saveInterfacesUpdate() {
+    const { item } = this.modalData;
+    const url = `/api/routers/${item.id}/update-interfaces`;
+    try {
+        await this.apiRequest(url, 'POST', { interfacesConfig: this.formData.interfacesConfig });
+        this.showToast('Interfaces mises à jour', 'success');
+        this.closeModal('updateInterfacesModal');
+    } catch (e) {
+        console.error('Interfaces update error:', e);
+    }
+},
+
+updateSecurityPolicies(firewallId) {
+    const item = this.firewalls.find(f => f.id === firewallId);
+    if (!item) return;
+    this.currentModal = 'updateSecurityPolicies';
+    this.modalTitle = `Politiques de sécurité: ${item.name}`;
+    this.modalData = { type: 'firewall', item };
+    this.formData = { securityPolicies: '' };
+    this.showModal('updateSecurityPoliciesModal');
+},
+
+async saveSecurityPolicies() {
+    const { item } = this.modalData;
+    const url = `/api/firewalls/${item.id}/update-security-policies`;
+    try {
+        await this.apiRequest(url, 'POST', { policies: this.formData.securityPolicies });
+        this.showToast('Politiques de sécurité mises à jour', 'success');
+        this.closeModal('updateSecurityPoliciesModal');
+    } catch (e) {
+        console.error('Security policies error:', e);
+    }
+},
+
+// ------------------------------------------------------------
+// Export
+// ------------------------------------------------------------
+exportDashboard() {
+    const dataStr = JSON.stringify({
+        sites: this.sites,
+        switches: this.switches,
+        routers: this.routers,
+        firewalls: this.firewalls,
+        totals: this.totals
+    }, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `netconfig-export-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    this.showToast('Données exportées avec succès', 'success');
+}
         };
     }
 </script>

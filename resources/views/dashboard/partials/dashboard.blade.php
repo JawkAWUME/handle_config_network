@@ -99,6 +99,8 @@
                 </div>
             </div>
         </div>
+
+        
     </section>
 
     <!-- Graphiques (chart.js) – les IDs sont utilisés par dashboardApp.initCharts() -->
@@ -127,17 +129,6 @@
             </div>
         </div>
         
-        <div class="chart-card">
-            <div class="chart-header">
-                <h3 class="chart-title"><i class="fas fa-exclamation-triangle"></i> Incidents par Type</h3>
-                <button class="btn btn-outline btn-sm" @click="toggleChartType('incidents')">
-                    <i class="fas fa-exchange-alt"></i> Type
-                </button>
-            </div>
-            <div class="chart-container">
-                <canvas id="incidentsChart"></canvas>
-            </div>
-        </div>
         
         <div class="chart-card">
             <div class="chart-header">

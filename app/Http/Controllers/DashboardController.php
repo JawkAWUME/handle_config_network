@@ -22,7 +22,7 @@ class DashboardController extends Controller
     /**
      * Afficher le tableau de bord principal
      */
-   public function index()
+    public function index()
     {
         $user = Auth::user();
 
@@ -30,77 +30,119 @@ class DashboardController extends Controller
             return redirect()->route('login');
         }
 
-
         // ------------------------------------------------------------
         // 1. Récupération des données avec filtrage automatique via Policies
         // ------------------------------------------------------------
         
-        // Sites – si l'utilisateur peut voir la liste
-        $sitesCount = Gate::allows('viewAny', Site::class) 
-            ? Site::count() 
-            : $user->sites()->count(); // relation éventuelle (sites assignés)
+        // Récupérer les collections complètes (avec permissions)
+        $sites = Gate::allows('viewAny', Site::class) 
+            ? Site::with(['switches', 'routers', 'firewalls'])->get()
+            : collect();
 
-        // Switches – avec politique viewAny
-        $switchesCount = Gate::allows('viewAny', SwitchModel::class) 
-            ? SwitchModel::count() 
-            : 0; // ou filtre personnalisé
+        $switches = Gate::allows('viewAny', SwitchModel::class) 
+            ? SwitchModel::with('site')->get()
+            : collect();
 
-        $routersCount = Gate::allows('viewAny', Router::class) 
-            ? Router::count() 
-            : 0;
+        $routers = Gate::allows('viewAny', Router::class) 
+            ? Router::with('site')->get()
+            : collect();
 
-        $firewallsCount = Gate::allows('viewAny', Firewall::class) 
-            ? Firewall::count() 
-            : 0;
+        $firewalls = Gate::allows('viewAny', Firewall::class) 
+            ? Firewall::with('site')->get()
+            : collect();
 
-        // Derniers équipements ajoutés (limité aux permissions)
-        $recentSwitches = $this->getRecentModels(SwitchModel::class);
-        $recentRouters   = $this->getRecentModels(Router::class);
-        $recentFirewalls = $this->getRecentModels(Firewall::class);
+        // Compter les équipements
+        $sitesCount = $sites->count();
+        $switchesCount = $switches->count();
+        $routersCount = $routers->count();
+        $firewallsCount = $firewalls->count();
 
-        // Derniers backups
-       // Derniers backups visibles
-        $recentBackups = Backup::recent(5)
-            ->visibleForUser($user)
-            ->with('backupable')
-            ->get();
-
-        // Alertes actives visibles
-        $activeAlerts = Alert::open()
-            ->recent(5)
-            ->visibleForUser($user)
-            ->with('alertable')
-            ->get();
-
-        // État des équipements (en ligne / hors ligne)
-        $onlineStats = [
-            'switches' => SwitchModel::where('status', 'online')->count(),
-            'routers'  => Router::where('status', 'online')->count(),
-            'firewalls'=> Firewall::where('status', 'online')->count(),
+        // ------------------------------------------------------------
+        // 2. Calculer les totaux pour le dashboard
+        // ------------------------------------------------------------
+        $totals = [
+            'sites' => $sitesCount,
+            'firewalls' => $firewallsCount,
+            'routers' => $routersCount,
+            'switches' => $switchesCount,
+            'devices' => $firewallsCount + $routersCount + $switchesCount,
+            'availability' => 99.7, // À calculer selon votre logique
+            'avgUptime' => 45, // À calculer selon votre logique
+            'incidentsToday' => Alert::whereDate('created_at', today())->count(),
         ];
 
         // ------------------------------------------------------------
-        // 2. Permissions pour les actions du dashboard (affichage conditionnel)
+        // 3. Préparer les données pour les graphiques Chart.js
+        // ------------------------------------------------------------
+        $chartData = [
+            'deviceDistribution' => [
+                'labels' => ['Firewalls', 'Routeurs', 'Switchs'],
+                'data' => [$firewallsCount, $routersCount, $switchesCount],
+                'colors' => ['#ef4444', '#10b981', '#0ea5e9']
+            ],
+            'availabilityData' => [
+                'labels' => ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
+                'data' => $this->getWeeklyAvailability()
+            ],
+            // 'incidentsData' => [
+            //     'labels' => ['Connexion', 'CPU', 'Mémoire', 'Bande Passante', 'Disque'],
+            //     'data' => $this->getIncidentsByType()
+            // ],
+            'loadData' => [
+                'labels' => ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'],
+                'firewalls' => $this->getEquipmentLoad('firewall'),
+                'routers' => $this->getEquipmentLoad('router'),
+                'switches' => $this->getEquipmentLoad('switch')
+            ]
+        ];
+
+        // ------------------------------------------------------------
+        // 4. Derniers équipements ajoutés
+        // ------------------------------------------------------------
+        $recentSwitches = $this->getRecentModels(SwitchModel::class);
+        $recentRouters = $this->getRecentModels(Router::class);
+        $recentFirewalls = $this->getRecentModels(Firewall::class);
+
+        // ------------------------------------------------------------
+        // 5. Derniers backups et alertes
+        // ------------------------------------------------------------
+        $recentBackups = Backup::latest()
+            ->limit(5)
+            ->get();
+
+        $activeAlerts = Alert::where('status', 'open')
+            ->latest()
+            ->limit(5)
+            ->get();
+
+        // ------------------------------------------------------------
+        // 6. État des équipements (en ligne / hors ligne)
+        // ------------------------------------------------------------
+        $onlineStats = [
+            'switches' => $switches->where('status', 'active')->count(),
+            'routers' => $routers->where('status', true)->count(),
+            'firewalls' => $firewalls->where('status', true)->count(),
+        ];
+
+        // ------------------------------------------------------------
+        // 7. Permissions pour les actions du dashboard
         // ------------------------------------------------------------
         $can = [
-            'createSite'       => Gate::allows('create', Site::class),
-            'createSwitch'     => Gate::allows('create', SwitchModel::class),
-            'createRouter'     => Gate::allows('create', Router::class),
-            'deleteRouter'     => Gate::allows('delete', Router::class),
-            'createFirewall'   => Gate::allows('create', Firewall::class),
-            'viewAnySite'      => Gate::allows('viewAny', Site::class),
-            'viewAnySwitch'    => Gate::allows('viewAny', SwitchModel::class),
-            'viewAnyRouter'    => Gate::allows('viewAny', Router::class),
-            'viewAnyFirewall'  => Gate::allows('viewAny', Firewall::class),
-            'viewAnyBackup'    => Gate::allows('viewAny', Backup::class), // si policy existe
-            'admin'            => $user->hasRole('admin'),
+            'create' => Gate::allows('create', Site::class),
+            'export' => Gate::allows('viewAny', Site::class),
+            'viewAnySite' => Gate::allows('viewAny', Site::class),
+            'viewAnySwitch' => Gate::allows('viewAny', SwitchModel::class),
+            'viewAnyRouter' => Gate::allows('viewAny', Router::class),
+            'viewAnyFirewall' => Gate::allows('viewAny', Firewall::class),
         ];
 
         return view('dashboard.index', compact(
-            'sitesCount',
-            'switchesCount',
-            'routersCount',
-            'firewallsCount',
+            'sites',
+            'switches',
+            'routers',
+            'firewalls',
+            'totals',
+            'chartData',
             'recentSwitches',
             'recentRouters',
             'recentFirewalls',
@@ -109,6 +151,61 @@ class DashboardController extends Controller
             'onlineStats',
             'can'
         ));
+    }
+
+    /**
+     * Obtenir la disponibilité hebdomadaire
+     */
+    private function getWeeklyAvailability()
+    {
+        // TODO: Implémenter la logique réelle
+        // Pour l'instant, retourner des données simulées
+        return [99.2, 99.5, 99.8, 99.7, 99.6, 99.9, 99.4];
+    }
+
+    /**
+     * Obtenir les incidents par type
+     */
+    private function getIncidentsByType()
+    {
+        // TODO: Implémenter la logique réelle basée sur votre modèle Alert
+        // Pour l'instant, retourner des données simulées
+        $incidents = [
+            'connection' => Alert::where('type', 'connection')->whereDate('created_at', today())->count(),
+            'cpu' => Alert::where('type', 'cpu')->whereDate('created_at', today())->count(),
+            'memory' => Alert::where('type', 'memory')->whereDate('created_at', today())->count(),
+            'bandwidth' => Alert::where('type', 'bandwidth')->whereDate('created_at', today())->count(),
+            'disk' => Alert::where('type', 'disk')->whereDate('created_at', today())->count(),
+        ];
+        
+        return array_values($incidents);
+    }
+
+    /**
+     * Obtenir la charge des équipements
+     */
+    private function getEquipmentLoad(string $type)
+    {
+        // TODO: Implémenter la logique réelle
+        // Pour l'instant, retourner des données simulées
+        $loads = [
+            'firewall' => [45, 48, 62, 68, 55, 50],
+            'router' => [60, 58, 72, 78, 65, 62],
+            'switch' => [40, 42, 55, 58, 48, 45]
+        ];
+        
+        return $loads[$type] ?? [0, 0, 0, 0, 0, 0];
+    }
+
+    /**
+     * Récupérer les modèles récents
+     */
+    private function getRecentModels(string $modelClass)
+    {
+        if (!Gate::allows('viewAny', $modelClass)) {
+            return collect();
+        }
+        return $modelClass::with('site')->latest()->limit(3)->get();
     }
 
     /**
@@ -141,79 +238,5 @@ class DashboardController extends Controller
     public function firewalls()
     {
         return view('dashboard.firewalls');
-    }
-
-    /**
-     * Récupérer les mises à jour récentes
-     */
-    private function getRecentUpdates()
-    {
-        $recentUpdates = [];
-        
-        // Récupérer les 5 derniers switchs modifiés
-        $recentSwitches = SwitchModel::with('site')
-            ->orderBy('updated_at', 'desc')
-            ->limit(3)
-            ->get()
-            ->map(function ($switch) {
-                return [
-                    'type' => 'switch',
-                    'id' => $switch->id,
-                    'name' => $switch->name,
-                    'site' => $switch->site->name ?? 'N/A',
-                    'updated_at' => $switch->updated_at->format('Y-m-d H:i:s'),
-                    'updated_at_human' => $switch->updated_at->diffForHumans(),
-                ];
-            });
-        
-        // Récupérer les 5 derniers routeurs modifiés
-        $recentRouters = Router::with('site')
-            ->orderBy('updated_at', 'desc')
-            ->limit(3)
-            ->get()
-            ->map(function ($router) {
-                return [
-                    'type' => 'router',
-                    'id' => $router->id,
-                    'name' => $router->name,
-                    'site' => $router->site->name ?? 'N/A',
-                    'updated_at' => $router->updated_at->format('Y-m-d H:i:s'),
-                    'updated_at_human' => $router->updated_at->diffForHumans(),
-                ];
-            });
-        
-        // Récupérer les 5 derniers firewalls modifiés
-        $recentFirewalls = Firewall::with('site')
-            ->orderBy('updated_at', 'desc')
-            ->limit(3)
-            ->get()
-            ->map(function ($firewall) {
-                return [
-                    'type' => 'firewall',
-                    'id' => $firewall->id,
-                    'name' => $firewall->name,
-                    'site' => $firewall->site->name ?? 'N/A',
-                    'updated_at' => $firewall->updated_at->format('Y-m-d H:i:s'),
-                    'updated_at_human' => $firewall->updated_at->diffForHumans(),
-                ];
-            });
-        
-        // Fusionner et trier par date
-        $recentUpdates = collect($recentSwitches)
-            ->merge($recentRouters)
-            ->merge($recentFirewalls)
-            ->sortByDesc('updated_at')
-            ->values()
-            ->take(5);
-        
-        return $recentUpdates;
-    }
-
-        private function getRecentModels(string $modelClass)
-    {
-        if (!Gate::allows('viewAny', $modelClass)) {
-            return collect();
-        }
-        return $modelClass::latest()->limit(3)->get();
     }
 }
