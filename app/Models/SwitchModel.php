@@ -15,7 +15,7 @@ class SwitchModel extends Model
     protected $fillable = [
             'name',
             'site_id',
-
+            'user_id',
             'brand',
             'model',
             'firmware_version',
@@ -47,6 +47,11 @@ class SwitchModel extends Model
     public function site()
     {
         return $this->belongsTo(Site::class);
+    }
+
+     public function user()
+    {
+            return $this->belongsTo(User::class);
     }
 
     public function configurationHistories()

@@ -28,6 +28,7 @@ class Firewall extends Model
     protected $fillable = [
         'name',
         'site_id',
+        'user_id',
         'firewall_type',
         'brand',
         'model',
@@ -89,6 +90,10 @@ class Firewall extends Model
         return $this->belongsTo(Site::class);
     }
 
+    public function user()
+    {
+            return $this->belongsTo(User::class);
+        }
     /**
      * Relation avec le pair en haute disponibilité
      */

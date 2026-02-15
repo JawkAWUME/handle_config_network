@@ -144,129 +144,215 @@
     </section>
 
     <!-- Section Activité Récente -->
-    <section class="equipment-section fade-in">
-        <div class="section-header">
-            <h2 class="section-title">
-                <i class="fas fa-history"></i> Activité Récente
-            </h2>
-            <div class="section-actions">
-                <button class="btn btn-outline" @click="init()">
-                    <i class="fas fa-sync-alt"></i> Actualiser
-                </button>
+   <!-- Section Activité Récente -->
+
+<!-- Section Activité Récente avec affichage de l'utilisateur -->
+<section class="equipment-section fade-in">
+    <div class="section-header">
+        <h2 class="section-title">
+            <i class="fas fa-history"></i> Activité Récente
+        </h2>
+        <div class="section-actions">
+            <button class="btn btn-outline" @click="init()">
+                <i class="fas fa-sync-alt"></i> Actualiser
+            </button>
+        </div>
+    </div>
+    
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+        <!-- Derniers Firewalls -->
+        <div>
+            <h4 style="color: var(--primary-color); margin-bottom: 15px;">
+                <i class="fas fa-fire"></i> Derniers Firewalls
+            </h4>
+            <div style="max-height: 300px; overflow-y: auto;">
+                <template x-if="firewalls && firewalls.length > 0">
+                    <div>
+                        <template x-for="firewall in firewalls.slice(0, 3)" :key="firewall.id">
+                            <div style="padding: 12px; border-bottom: 1px solid var(--border-color); cursor: pointer; transition: all 0.2s; border-radius: 8px; margin-bottom: 8px;" 
+                                 @click="viewEquipmentDetails('firewall', firewall)"
+                                 @mouseenter="$el.style.background = '#f8fafc'; $el.style.transform = 'translateX(4px)'"
+                                 @mouseleave="$el.style.background = 'transparent'; $el.style.transform = 'translateX(0)'">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <div style="flex: 1;">
+                                        <strong x-text="firewall.name" style="color: var(--text-color); font-size: 1rem;"></strong>
+                                        <div style="font-size: 0.85rem; color: var(--text-light); margin-top: 4px;">
+                                            <i class="fas fa-building" style="width: 14px;"></i>
+                                            <span x-text="firewall.site?.name || firewall.site || 'N/A'"></span>
+                                        </div>
+                                        <div style="font-size: 0.85rem; color: var(--text-light); margin-top: 2px;">
+                                            <i class="fas fa-microchip" style="width: 14px;"></i>
+                                            <span x-text="firewall.model || 'N/A'"></span>
+                                        </div>
+                                    </div>
+                                    <span class="status-badge" 
+                                          :class="firewall.status ? 'status-active' : 'status-danger'" 
+                                          style="font-size: 0.7rem;">
+                                        <span x-text="firewall.status ? 'Actif' : 'Inactif'"></span>
+                                    </span>
+                                </div>
+                                
+                                <!-- Ligne utilisateur et date -->
+                                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-light); padding-top: 8px; border-top: 1px solid #f1f5f9;">
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <i class="fas fa-user-circle" style="color: var(--primary-color);"></i>
+                                        <span x-text="firewall.user?.name || firewall.configured_by || 'Système'" style="font-weight: 500;"></span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <i class="fas fa-clock"></i>
+                                        <span x-text="formatDate(firewall.updated_at)"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+                <template x-if="!firewalls || firewalls.length === 0">
+                    <p class="text-muted text-center" style="padding: 20px; color: var(--text-light);">
+                        <i class="fas fa-info-circle"></i> Aucun firewall récent
+                    </p>
+                </template>
             </div>
         </div>
         
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
-            <!-- Derniers Firewalls -->
-            <div>
-                <h4 style="color: var(--primary-color); margin-bottom: 15px;">
-                    <i class="fas fa-fire"></i> Derniers Firewalls
-                </h4>
-                <div style="max-height: 300px; overflow-y: auto;">
-                    <template x-if="firewalls && firewalls.length > 0">
-                        <div>
-                            <template x-for="firewall in firewalls.slice(0, 3)" :key="firewall.id">
-                                <div style="padding: 10px; border-bottom: 1px solid var(--border-color); cursor: pointer;" 
-                                     @click="viewItem('firewalls', firewall.id)">
-                                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                                        <div>
-                                            <strong x-text="firewall.name"></strong>
-                                            <div style="font-size: 0.85rem; color: var(--text-light);">
-                                                <span x-text="firewall.site"></span> • <span x-text="firewall.model"></span>
-                                            </div>
+        <!-- Derniers Routeurs -->
+        <div>
+            <h4 style="color: var(--primary-color); margin-bottom: 15px;">
+                <i class="fas fa-route"></i> Derniers Routeurs
+            </h4>
+            <div style="max-height: 300px; overflow-y: auto;">
+                <template x-if="routers && routers.length > 0">
+                    <div>
+                        <template x-for="router in routers.slice(0, 3)" :key="router.id">
+                            <div style="padding: 12px; border-bottom: 1px solid var(--border-color); cursor: pointer; transition: all 0.2s; border-radius: 8px; margin-bottom: 8px;" 
+                                 @click="viewEquipmentDetails('router', router)"
+                                 @mouseenter="$el.style.background = '#f8fafc'; $el.style.transform = 'translateX(4px)'"
+                                 @mouseleave="$el.style.background = 'transparent'; $el.style.transform = 'translateX(0)'">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <div style="flex: 1;">
+                                        <strong x-text="router.name" style="color: var(--text-color); font-size: 1rem;"></strong>
+                                        <div style="font-size: 0.85rem; color: var(--text-light); margin-top: 4px;">
+                                            <i class="fas fa-building" style="width: 14px;"></i>
+                                            <span x-text="router.site?.name || router.site || 'N/A'"></span>
                                         </div>
-                                        <span class="status-badge" 
-                                              :class="firewall.status ? 'status-active' : 'status-danger'" 
-                                              style="font-size: 0.7rem;">
-                                            <span x-text="firewall.status ? 'Actif' : 'Inactif'"></span>
-                                        </span>
+                                        <div style="font-size: 0.85rem; color: var(--text-light); margin-top: 2px;">
+                                            <i class="fas fa-microchip" style="width: 14px;"></i>
+                                            <span x-text="router.model || 'N/A'"></span>
+                                        </div>
                                     </div>
-                                    <div style="font-size: 0.8rem; color: var(--text-light); margin-top: 5px;">
-                                        <i class="fas fa-clock"></i> <span x-text="firewall.lastSeen || 'N/A'"></span>
+                                    <span class="status-badge" 
+                                          :class="router.status ? 'status-active' : 'status-danger'" 
+                                          style="font-size: 0.7rem;">
+                                        <span x-text="router.status ? 'Actif' : 'Inactif'"></span>
+                                    </span>
+                                </div>
+                                
+                                <!-- Ligne utilisateur et date -->
+                                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-light); padding-top: 8px; border-top: 1px solid #f1f5f9;">
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <i class="fas fa-user-circle" style="color: var(--primary-color);"></i>
+                                        <span x-text="router.user?.name || router.configured_by || 'Système'" style="font-weight: 500;"></span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <i class="fas fa-clock"></i>
+                                        <span x-text="formatDate(router.updated_at)"></span>
                                     </div>
                                 </div>
-                            </template>
-                        </div>
-                    </template>
-                    <template x-if="!firewalls || firewalls.length === 0">
-                        <p class="text-muted text-center" style="padding: 20px;">Aucun firewall récent</p>
-                    </template>
-                </div>
-            </div>
-            
-            <!-- Derniers Routeurs -->
-            <div>
-                <h4 style="color: var(--primary-color); margin-bottom: 15px;">
-                    <i class="fas fa-route"></i> Derniers Routeurs
-                </h4>
-                <div style="max-height: 300px; overflow-y: auto;">
-                    <template x-if="routers && routers.length > 0">
-                        <div>
-                            <template x-for="router in routers.slice(0, 3)" :key="router.id">
-                                <div style="padding: 10px; border-bottom: 1px solid var(--border-color); cursor: pointer;" 
-                                     @click="viewItem('routers', router.id)">
-                                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                                        <div>
-                                            <strong x-text="router.name"></strong>
-                                            <div style="font-size: 0.85rem; color: var(--text-light);">
-                                                <span x-text="router.site"></span> • <span x-text="router.model"></span>
-                                            </div>
-                                        </div>
-                                        <span class="status-badge" 
-                                              :class="router.status ? 'status-active' : 'status-danger'" 
-                                              style="font-size: 0.7rem;">
-                                            <span x-text="router.status ? 'Actif' : 'Inactif'"></span>
-                                        </span>
-                                    </div>
-                                    <div style="font-size: 0.8rem; color: var(--text-light); margin-top: 5px;">
-                                        <i class="fas fa-clock"></i> <span x-text="router.lastSeen || 'N/A'"></span>
-                                    </div>
-                                </div>
-                            </template>
-                        </div>
-                    </template>
-                    <template x-if="!routers || routers.length === 0">
-                        <p class="text-muted text-center" style="padding: 20px;">Aucun routeur récent</p>
-                    </template>
-                </div>
-            </div>
-            
-            <!-- Derniers Switchs -->
-            <div>
-                <h4 style="color: var(--primary-color); margin-bottom: 15px;">
-                    <i class="fas fa-exchange-alt"></i> Derniers Switchs
-                </h4>
-                <div style="max-height: 300px; overflow-y: auto;">
-                    <template x-if="switches && switches.length > 0">
-                        <div>
-                            <template x-for="sw in switches.slice(0, 3)" :key="sw.id">
-                                <div style="padding: 10px; border-bottom: 1px solid var(--border-color); cursor: pointer;" 
-                                     @click="viewItem('switches', sw.id)">
-                                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                                        <div>
-                                            <strong x-text="sw.name"></strong>
-                                            <div style="font-size: 0.85rem; color: var(--text-light);">
-                                                <span x-text="sw.site"></span> • <span x-text="sw.model"></span>
-                                            </div>
-                                        </div>
-                                        <span class="status-badge" 
-                                              :class="sw.status === 'active' ? 'status-active' : (sw.status === 'warning' ? 'status-warning' : 'status-danger')" 
-                                              style="font-size: 0.7rem;">
-                                            <span x-text="sw.status === 'active' ? 'Actif' : (sw.status === 'warning' ? 'Avertissement' : 'Critique')"></span>
-                                        </span>
-                                    </div>
-                                    <div style="font-size: 0.8rem; color: var(--text-light); margin-top: 5px;">
-                                        <i class="fas fa-clock"></i> <span x-text="sw.lastSeen || 'N/A'"></span>
-                                    </div>
-                                </div>
-                            </template>
-                        </div>
-                    </template>
-                    <template x-if="!switches || switches.length === 0">
-                        <p class="text-muted text-center" style="padding: 20px;">Aucun switch récent</p>
-                    </template>
-                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+                <template x-if="!routers || routers.length === 0">
+                    <p class="text-muted text-center" style="padding: 20px; color: var(--text-light);">
+                        <i class="fas fa-info-circle"></i> Aucun routeur récent
+                    </p>
+                </template>
             </div>
         </div>
-    </section>
+        
+        <!-- Derniers Switchs -->
+        <div>
+            <h4 style="color: var(--primary-color); margin-bottom: 15px;">
+                <i class="fas fa-exchange-alt"></i> Derniers Switchs
+            </h4>
+            <div style="max-height: 300px; overflow-y: auto;">
+                <template x-if="switches && switches.length > 0">
+                    <div>
+                        <template x-for="sw in switches.slice(0, 3)" :key="sw.id">
+                            <div style="padding: 12px; border-bottom: 1px solid var(--border-color); cursor: pointer; transition: all 0.2s; border-radius: 8px; margin-bottom: 8px;" 
+                                 @click="viewEquipmentDetails('switch', sw)"
+                                 @mouseenter="$el.style.background = '#f8fafc'; $el.style.transform = 'translateX(4px)'"
+                                 @mouseleave="$el.style.background = 'transparent'; $el.style.transform = 'translateX(0)'">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <div style="flex: 1;">
+                                        <strong x-text="sw.name" style="color: var(--text-color); font-size: 1rem;"></strong>
+                                        <div style="font-size: 0.85rem; color: var(--text-light); margin-top: 4px;">
+                                            <i class="fas fa-building" style="width: 14px;"></i>
+                                            <span x-text="sw.site?.name || sw.site || 'N/A'"></span>
+                                        </div>
+                                        <div style="font-size: 0.85rem; color: var(--text-light); margin-top: 2px;">
+                                            <i class="fas fa-microchip" style="width: 14px;"></i>
+                                            <span x-text="sw.model || 'N/A'"></span>
+                                        </div>
+                                    </div>
+                                    <span class="status-badge" 
+                                          :class="sw.status === 'active' ? 'status-active' : (sw.status === 'warning' ? 'status-warning' : 'status-danger')" 
+                                          style="font-size: 0.7rem;">
+                                        <span x-text="sw.status === 'active' ? 'Actif' : (sw.status === 'warning' ? 'Avertissement' : 'Critique')"></span>
+                                    </span>
+                                </div>
+                                
+                                <!-- Ligne utilisateur et date -->
+                                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-light); padding-top: 8px; border-top: 1px solid #f1f5f9;">
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <i class="fas fa-user-circle" style="color: var(--primary-color);"></i>
+                                        <span x-text="sw.user?.name || sw.configured_by || 'Système'" style="font-weight: 500;"></span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <i class="fas fa-clock"></i>
+                                        <span x-text="formatDate(sw.updated_at)"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+                <template x-if="!switches || switches.length === 0">
+                    <p class="text-muted text-center" style="padding: 20px; color: var(--text-light);">
+                        <i class="fas fa-info-circle"></i> Aucun switch récent
+                    </p>
+                </template>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Modal de détails d'équipement -->
+<div id="equipmentDetailsModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div style="background: white; border-radius: var(--border-radius-lg); width: 90%; max-width: 800px; max-height: 90vh; overflow-y: auto; box-shadow: var(--card-shadow-hover);">
+        <!-- Header du modal -->
+        <div style="padding: 24px; border-bottom: 2px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%); color: white; border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;">
+            <h3 style="margin: 0; font-size: 1.5rem; display: flex; align-items: center; gap: 12px;">
+                <i class="fas" :class="getEquipmentIcon(modalData.type)"></i>
+                <span x-text="modalData.item?.name || 'Détails de l\'équipement'"></span>
+            </h3>
+            <button @click="closeModal('equipmentDetailsModal')" style="background: rgba(255,255,255,0.2); border: none; color: white; font-size: 1.5rem; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; transition: var(--transition);" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <!-- Contenu du modal -->
+        <div style="padding: 24px;" x-html="renderEquipmentDetails()"></div>
+        
+        <!-- Footer du modal -->
+        <div style="padding: 20px 24px; border-top: 2px solid var(--border-color); display: flex; justify-content: flex-end; gap: 12px; background: #f8fafc;">
+            <button class="btn btn-outline" @click="closeModal('equipmentDetailsModal')">
+                <i class="fas fa-times"></i> Fermer
+            </button>
+            <button class="btn btn-primary" @click="editEquipment(modalData.type, modalData.item.id)" x-show="permissions.create">
+                <i class="fas fa-edit"></i> Modifier
+            </button>
+        </div>
+    </div>
+</div>
 </div>

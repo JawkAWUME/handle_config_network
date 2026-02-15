@@ -1076,10 +1076,10 @@
     function dashboardApp() {
         return {
             // Data from Laravel (avec valeurs par défaut pour éviter les erreurs)
-            sites: @json($sitesCount ?? []),
-            switches: @json($switchesCount ?? []),
-            routers: @json($routersCount ?? []),
-            firewalls: @json($firewallsCount ?? []),
+            sites: @json($sites ?? []),
+            switches: @json($switches ?? []),
+            routers: @json($routers ?? []),
+            firewalls: @json($firewalls ?? []),
             totals: @json($totals ?? $chartTotalsSafe),
             chartData: @json($chartData ?? $chartDataSafe),
             permissions: @json($can ?? []),
@@ -1744,7 +1744,307 @@ exportDashboard() {
     a.download = `netconfig-export-${new Date().toISOString().slice(0,10)}.json`;
     a.click();
     this.showToast('Données exportées avec succès', 'success');
-}
+},
+
+formatDate(dateString) {
+    if (!dateString) return 'N/A';
+    
+    try {
+        const date = new Date(dateString);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        
+        // Il y a moins d'une minute
+        if (diffMins < 1) {
+            return 'À l\'instant';
+        }
+        // Il y a moins d'une heure
+        else if (diffMins < 60) {
+            return `Il y a ${diffMins} min`;
+        }
+        // Il y a moins de 24 heures
+        else if (diffHours < 24) {
+            return `Il y a ${diffHours}h`;
+        }
+        // Il y a moins de 7 jours
+        else if (diffDays < 7) {
+            return `Il y a ${diffDays}j`;
+        }
+        // Plus ancien
+        else {
+            return date.toLocaleDateString('fr-FR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+    } catch (e) {
+        console.error('Error formatting date:', e);
+        return 'Date invalide';
+    }
+},
+
+// ------------------------------------------------------------
+// Icône de l'équipement
+// ------------------------------------------------------------
+getEquipmentIcon(type) {
+    const icons = {
+        'firewall': 'fa-fire',
+        'router': 'fa-route',
+        'switch': 'fa-exchange-alt',
+        'site': 'fa-building'
+    };
+    return icons[type] || 'fa-server';
+},
+
+// ------------------------------------------------------------
+// Afficher les détails de l'équipement dans un modal
+// ------------------------------------------------------------
+viewEquipmentDetails(type, item) {
+    this.modalData = {
+        type: type,
+        item: item
+    };
+    this.showModal('equipmentDetailsModal');
+},
+
+// ------------------------------------------------------------
+// Rendu HTML des détails de l'équipement
+// ------------------------------------------------------------
+getLastAccessUser(equipment) {
+    // Si access_logs est chargé avec l'équipement
+    if (equipment.access_logs && equipment.access_logs.length > 0) {
+        const lastLog = equipment.access_logs[0]; // Le premier est le plus récent
+        return lastLog.user?.name || lastLog.username || 'Inconnu';
+    }
+    
+    // Si last_access_user est présent (ajouté par le contrôleur)
+    if (equipment.last_access_user) {
+        return equipment.last_access_user;
+    }
+    
+    return 'Aucun accès';
+},
+
+// ------------------------------------------------------------
+// Rendu HTML des détails de l'équipement (VERSION COMPLÈTE)
+// ------------------------------------------------------------
+renderEquipmentDetails() {
+    const item = this.modalData.item;
+    const type = this.modalData.type;
+    
+    if (!item) return '<p>Aucune donnée disponible</p>';
+    
+    let html = '<div style="display: grid; gap: 24px;">';
+    
+    // Section : Informations générales
+    html += `
+        <div class="detail-section" style="background: #f8fafc; padding: 20px; border-radius: var(--border-radius); border-left: 4px solid var(--primary-color);">
+            <h4 style="color: var(--primary-color); margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                <i class="fas fa-info-circle"></i> Informations générales
+            </h4>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                <div>
+                    <div style="font-size: 0.85rem; color: var(--text-light); margin-bottom: 4px;">Nom</div>
+                    <div style="font-weight: 600; color: var(--text-color);">${item.name || 'N/A'}</div>
+                </div>
+                <div>
+                    <div style="font-size: 0.85rem; color: var(--text-light); margin-bottom: 4px;">Site</div>
+                    <div style="font-weight: 600; color: var(--text-color);">${item.site?.name || item.site || 'N/A'}</div>
+                </div>
+                <div>
+                    <div style="font-size: 0.85rem; color: var(--text-light); margin-bottom: 4px;">Marque</div>
+                    <div style="font-weight: 600; color: var(--text-color);">${item.brand || 'N/A'}</div>
+                </div>
+                <div>
+                    <div style="font-size: 0.85rem; color: var(--text-light); margin-bottom: 4px;">Modèle</div>
+                    <div style="font-weight: 600; color: var(--text-color);">${item.model || 'N/A'}</div>
+                </div>
+                <div>
+                    <div style="font-size: 0.85rem; color: var(--text-light); margin-bottom: 4px;">Statut</div>
+                    <div>
+                        <span class="status-badge ${item.status ? 'status-active' : 'status-danger'}">
+                            <i class="fas ${item.status ? 'fa-check-circle' : 'fa-times-circle'}"></i>
+                            ${item.status ? 'Actif' : 'Inactif'}
+                        </span>
+                    </div>
+                </div>
+                <div>
+                    <div style="font-size: 0.85rem; color: var(--text-light); margin-bottom: 4px;">Numéro de série</div>
+                    <div style="font-weight: 600; color: var(--text-color); font-family: monospace;">${item.serial_number || 'N/A'}</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Section : Credentials d'accès ✅ NOUVEAU
+    html += `
+        <div class="detail-section" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 20px; border-radius: var(--border-radius); border-left: 4px solid var(--warning-color);">
+            <h4 style="color: #92400e; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                <i class="fas fa-key"></i> Credentials d'accès
+            </h4>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px;">
+                <div>
+                    <div style="font-size: 0.85rem; color: #92400e; margin-bottom: 4px; font-weight: 600;">
+                        <i class="fas fa-user-shield"></i> Nom d'utilisateur
+                    </div>
+                    <div style="background: white; padding: 10px; border-radius: 8px; font-family: monospace; font-weight: 600; color: var(--text-color); display: flex; align-items: center; gap: 8px;">
+                        ${item.username || '<span style="color: var(--text-light);">Non configuré</span>'}
+                        ${item.username ? '<i class="fas fa-copy" style="cursor: pointer; color: var(--primary-color);" onclick="navigator.clipboard.writeText(\'' + item.username + '\'); alert(\'Copié!\')"></i>' : ''}
+                    </div>
+                </div>
+                <div>
+                    <div style="font-size: 0.85rem; color: #92400e; margin-bottom: 4px; font-weight: 600;">
+                        <i class="fas fa-lock"></i> Mot de passe
+                    </div>
+                    <div style="background: white; padding: 10px; border-radius: 8px; font-family: monospace; font-weight: 600; color: var(--text-color);">
+                        ${'•'.repeat(12)}
+                        <span style="font-size: 0.75rem; color: var(--text-light); font-family: var(--font-secondary); margin-left: 8px;">(crypté)</span>
+                    </div>
+                </div>
+                ${item.enable_password ? `
+                <div>
+                    <div style="font-size: 0.85rem; color: #92400e; margin-bottom: 4px; font-weight: 600;">
+                        <i class="fas fa-shield-alt"></i> Enable Password
+                    </div>
+                    <div style="background: white; padding: 10px; border-radius: 8px; font-family: monospace; font-weight: 600; color: var(--text-color);">
+                        ${'•'.repeat(12)}
+                        <span style="font-size: 0.75rem; color: var(--text-light); font-family: var(--font-secondary); margin-left: 8px;">(crypté)</span>
+                    </div>
+                </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+    
+    // Section : Derniers accès ✅ NOUVEAU
+    if (item.access_logs && item.access_logs.length > 0) {
+        html += `
+            <div class="detail-section" style="background: #e0f2fe; padding: 20px; border-radius: var(--border-radius); border-left: 4px solid var(--info-color);">
+                <h4 style="color: #0369a1; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-history"></i> Derniers accès (${item.access_logs.slice(0, 5).length})
+                </h4>
+                <div style="display: grid; gap: 10px;">
+        `;
+        
+        item.access_logs.slice(0, 5).forEach((log, index) => {
+            const logDate = new Date(log.accessed_at || log.created_at);
+            html += `
+                <div style="background: white; padding: 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 0.9rem;">
+                            ${(log.user?.name || log.username || 'U').charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                            <div style="font-weight: 600; color: var(--text-color);">${log.user?.name || log.username || 'Utilisateur inconnu'}</div>
+                            <div style="font-size: 0.8rem; color: var(--text-light);">
+                                <i class="fas fa-desktop"></i> ${log.ip_address || 'IP inconnue'}
+                                ${log.action ? `• <i class="fas fa-cog"></i> ${log.action}` : ''}
+                            </div>
+                        </div>
+                    </div>
+                    <div style="text-align: right; font-size: 0.8rem; color: var(--text-light);">
+                        ${this.formatDate(log.accessed_at || log.created_at)}
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `
+                </div>
+                ${item.access_logs.length > 5 ? `<div style="text-align: center; margin-top: 12px; color: var(--text-light); font-size: 0.85rem;">... et ${item.access_logs.length - 5} accès supplémentaires</div>` : ''}
+            </div>
+        `;
+    } else {
+        html += `
+            <div class="detail-section" style="background: #f8fafc; padding: 20px; border-radius: var(--border-radius); border-left: 4px solid var(--text-light);">
+                <h4 style="color: var(--text-light); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-history"></i> Derniers accès
+                </h4>
+                <p style="color: var(--text-light); text-align: center; padding: 20px;">
+                    <i class="fas fa-info-circle"></i> Aucun accès enregistré
+                </p>
+            </div>
+        `;
+    }
+    
+    // Section : Configuration réseau
+    html += `
+        <div class="detail-section" style="background: #f8fafc; padding: 20px; border-radius: var(--border-radius); border-left: 4px solid var(--accent-color);">
+            <h4 style="color: var(--accent-color); margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                <i class="fas fa-network-wired"></i> Configuration réseau
+            </h4>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+    `;
+    
+    if (type === 'firewall' || type === 'router') {
+        html += `
+                <div>
+                    <div style="font-size: 0.85rem; color: var(--text-light); margin-bottom: 4px;">IP NMS</div>
+                    <div style="font-weight: 600; color: var(--text-color); font-family: monospace;">${item.ip_nms || 'N/A'}</div>
+                    ${item.vlan_nms ? `<div style="font-size: 0.8rem; color: var(--text-light);">VLAN ${item.vlan_nms}</div>` : ''}
+                </div>
+                <div>
+                    <div style="font-size: 0.85rem; color: var(--text-light); margin-bottom: 4px;">IP Service</div>
+                    <div style="font-weight: 600; color: var(--text-color); font-family: monospace;">${item.ip_service || 'N/A'}</div>
+                    ${item.vlan_service ? `<div style="font-size: 0.8rem; color: var(--text-light);">VLAN ${item.vlan_service}</div>` : ''}
+                </div>
+        `;
+    }
+    
+    if (type === 'router' && item.management_ip) {
+        html += `
+                <div>
+                    <div style="font-size: 0.85rem; color: var(--text-light); margin-bottom: 4px;">IP Management</div>
+                    <div style="font-weight: 600; color: var(--text-color); font-family: monospace;">${item.management_ip}</div>
+                </div>
+        `;
+    }
+    
+    html += `
+            </div>
+        </div>
+    `;
+    
+    // Sections spécifiques (firewall, router, switch) - code existant...
+    // [Gardez le reste du code de renderEquipmentDetails() que vous aviez]
+    
+    html += '</div>';
+    return html;
+},
+// ------------------------------------------------------------
+// Obtenir la date du dernier accès
+// ------------------------------------------------------------
+getLastAccessDate(equipment) {
+    // Essayer d'abord avec la relation lastAccessLog chargée
+    if (equipment.last_access_log?.accessed_at) {
+        return equipment.last_access_log.accessed_at;
+    }
+    
+    if (equipment.last_access_log?.created_at) {
+        return equipment.last_access_log.created_at;
+    }
+    
+    // Sinon avec l'accesseur last_accessed_at
+    if (equipment.last_accessed_at) {
+        return equipment.last_accessed_at;
+    }
+    
+    // Sinon chercher dans les access_logs si disponibles
+    if (equipment.access_logs && equipment.access_logs.length > 0) {
+        const lastLog = equipment.access_logs[0];
+        return lastLog.accessed_at || lastLog.created_at;
+    }
+    
+    // Par défaut : utiliser updated_at
+    return equipment.updated_at;
+},
+
         };
     }
 </script>

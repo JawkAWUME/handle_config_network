@@ -1,20 +1,26 @@
 <?php
 // database/seeders/FirewallSeeder.php
-
 namespace Database\Seeders;
 
 use App\Models\Firewall;
 use App\Models\Site;
+use App\Models\User;
+use App\Models\AccessLog;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class FirewallSeeder extends Seeder
 {
     public function run()
     {
-        // Récupérer les sites
         $sites = Site::all();
+        $users = User::all();
         
-        // Firewalls principaux
+        if ($users->isEmpty()) {
+            $this->command->warn('⚠️  Aucun utilisateur trouvé.');
+            return;
+        }
+        
         $firewalls = [
             [
                 'site_id' => $sites->where('name', 'Siège Social Paris')->first()->id,
@@ -26,58 +32,47 @@ class FirewallSeeder extends Seeder
                 'ip_service' => '192.168.1.1',
                 'vlan_nms' => 10,
                 'vlan_service' => 20,
+                'username' => 'admin_fw_paris',
+                'password' => Hash::make('SecurePass123!'),
+                'enable_password' => Hash::make('EnablePass123!'),
                 'firmware_version' => '10.1.0',
                 'serial_number' => 'PAN-PA3220-001',
+                'asset_tag' => 'FW-ASSET-001',
                 'status' => true,
                 'high_availability' => true,
                 'monitoring_enabled' => true,
-            ],
-            [
-                'site_id' => $sites->where('name', 'Datacenter Lyon')->first()->id,
-                'name' => 'FW-DC-LYON-01',
-                'brand' => 'Fortinet',
-                'model' => 'FortiGate 600E',
-                'firewall_type' => 'fortinet',
-                'ip_nms' => '10.10.2.1',
-                'ip_service' => '192.168.2.1',
-                'vlan_nms' => 30,
-                'vlan_service' => 40,
-                'firmware_version' => '7.0.0',
-                'serial_number' => 'FGT-600E-001',
-                'status' => true,
-                'high_availability' => false,
-                'monitoring_enabled' => true,
+                'notes' => 'Firewall principal du siège',
+                'security_policies' => json_encode([
+                    ['name' => 'Allow-Web', 'source_zone' => 'internal', 'destination_zone' => 'external', 'action' => 'allow']
+                ]),
+                'licenses' => json_encode([
+                    ['name' => 'Threat Prevention', 'expiration_date' => now()->addMonths(6)->format('Y-m-d')]
+                ]),
             ],
         ];
         
-        foreach ($firewalls as $firewall) {
-            Firewall::factory()->create($firewall);
+        foreach ($firewalls as $data) {
+            $firewall = Firewall::create($data);
+            $this->createAccessLogs($firewall, $users);
         }
         
-        // Firewalls supplémentaires générés aléatoirement
-        Firewall::factory()->count(8)->create();
-        
-        // Configurer les paires HA
-        $this->configureHaPairs();
+        Firewall::factory()->count(8)->create()->each(function ($fw) use ($users) {
+            $this->createAccessLogs($fw, $users);
+        });
     }
     
-    private function configureHaPairs()
+    private function createAccessLogs($firewall, $users)
     {
-        // Créer des paires HA pour certains firewalls
-        $firewalls = Firewall::where('high_availability', true)->get();
-        
-        foreach ($firewalls as $firewall) {
-            // Créer un pair HA
-            $haPeer = Firewall::factory()->create([
-                'site_id' => $firewall->site_id,
-                'name' => str_replace('-01', '-02', $firewall->name),
-                'brand' => $firewall->brand,
-                'model' => $firewall->model,
-                'ha_peer_id' => $firewall->id,
+        for ($i = 0; $i < rand(3, 7); $i++) {
+            AccessLog::create([
+                'device_type' => Firewall::class,
+                'device_id' => $firewall->id,
+                'user_id' => $users->random()->id,
+                'username' => $firewall->username,
+                'ip_address' => '192.168.' . rand(1, 254) . '.' . rand(1, 254),
+                'action' => ['backup', 'config', 'view'][array_rand(['backup', 'config', 'view'])],
+                'accessed_at' => now()->subHours(rand(1, 720)),
             ]);
-            
-            // Mettre à jour le firewall principal avec l'ID du pair
-            $firewall->update(['ha_peer_id' => $haPeer->id]);
         }
     }
 }

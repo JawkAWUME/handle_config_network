@@ -40,15 +40,15 @@ class DashboardController extends Controller
             : collect();
 
         $switches = Gate::allows('viewAny', SwitchModel::class) 
-            ? SwitchModel::with('site')->get()
+            ? SwitchModel::with('site', 'user')->get()
             : collect();
 
         $routers = Gate::allows('viewAny', Router::class) 
-            ? Router::with('site')->get()
+            ? Router::with('site', 'user')->get()
             : collect();
 
         $firewalls = Gate::allows('viewAny', Firewall::class) 
-            ? Firewall::with('site')->get()
+            ? Firewall::with('site', 'user')->get()
             : collect();
 
         // Compter les équipements

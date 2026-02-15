@@ -19,6 +19,7 @@ class Router extends Model
     protected $fillable = [
         'name',
         'site_id',
+        'user_id',
         'brand',
         'model',
         'interfaces',
@@ -66,6 +67,10 @@ class Router extends Model
         return $this->belongsTo(Site::class);
     }
 
+    public function user()
+        {
+            return $this->belongsTo(User::class);
+        }
     /**
      * Relation avec l'historique des configurations
      */
