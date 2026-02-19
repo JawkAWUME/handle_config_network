@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('name');
             $table->foreignId('site_id')->constrained()->cascadeOnDelete();
 
-            $table->string('firewall_type');
+            $table->string('firewall_type')->nullable();
             $table->string('brand');
             $table->string('model');
 

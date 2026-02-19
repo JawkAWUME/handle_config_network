@@ -27,83 +27,24 @@ class RouterSeeder extends Seeder
                 'name' => 'RTR-CORE-PARIS-01',
                 'brand' => 'Cisco',
                 'model' => 'ASR 1001-X',
-                'management_ip' => '10.10.1.254',
+                // ✅ Ajout des champs manquants attendus par la vue/contrôleur
+                'ip_nms' => '10.10.1.254',
+                'ip_service' => '192.168.1.254',
+                'management_ip' => '172.16.0.1',
                 'vlan_nms' => 10,
                 'vlan_service' => 20,
-                
-                // ✅ CREDENTIALS
                 'username' => 'admin_rtr_paris',
                 'password' => Hash::make('RouterPass123!'),
-                
-                // ✅ METADATA
-                'operating_system' => 'IOS XE 17.3.1',
+                'enable_password' => Hash::make('EnablePass123!'),
                 'serial_number' => 'CISCO-ASR1001X-001',
                 'asset_tag' => 'RTR-ASSET-001',
                 'status' => true,
-                'notes' => 'Routeur core principal. Gère le routage inter-VLAN et BGP.',
-                
-                // ✅ INTERFACES
-                'interfaces' => json_encode([
-                    [
-                        'name' => 'GigabitEthernet0/0/0',
-                        'ip_address' => '192.168.1.254',
-                        'subnet_mask' => '/24',
-                        'description' => 'LAN Principal',
-                        'status' => 'up',
-                        'vlan' => 10,
-                        'speed' => '1G'
-                    ],
-                    [
-                        'name' => 'GigabitEthernet0/0/1',
-                        'ip_address' => '203.0.113.1',
-                        'subnet_mask' => '/30',
-                        'description' => 'WAN Internet',
-                        'status' => 'up',
-                        'vlan' => null,
-                        'speed' => '1G'
-                    ],
-                    [
-                        'name' => 'GigabitEthernet0/0/2',
-                        'ip_address' => '10.0.0.1',
-                        'subnet_mask' => '/30',
-                        'description' => 'Link to Lyon',
-                        'status' => 'up',
-                        'vlan' => null,
-                        'speed' => '1G'
-                    ],
-                ]),
-                
-                // ✅ ROUTING PROTOCOLS
-                'routing_protocols' => json_encode(['OSPF', 'BGP', 'EIGRP']),
-            ],
-            
-            [
-                'site_id' => $sites->where('name', 'Datacenter Lyon')->first()->id,
-                'name' => 'RTR-DC-LYON-01',
-                'brand' => 'Juniper',
-                'model' => 'MX204',
-                'management_ip' => '10.10.2.254',
-                'vlan_nms' => 30,
-                'vlan_service' => 40,
-                'username' => 'admin_jnpr_lyon',
-                'password' => Hash::make('JuniperPass456!'),
-                'operating_system' => 'JunOS 21.2R1',
-                'serial_number' => 'JNPR-MX204-001',
-                'asset_tag' => 'RTR-ASSET-002',
-                'status' => true,
-                'notes' => 'Routeur datacenter. MPLS et redondance.',
-                'interfaces' => json_encode([
-                    [
-                        'name' => 'ge-0/0/0',
-                        'ip_address' => '192.168.2.254',
-                        'subnet_mask' => '/24',
-                        'description' => 'DC LAN',
-                        'status' => 'up',
-                        'vlan' => 30,
-                        'speed' => '1G'
-                    ],
-                ]),
-                'routing_protocols' => json_encode(['OSPF', 'MPLS']),
+                // ✅ Champs pour le tableau de la vue
+                'interfaces_count' => 24,
+                'interfaces_up_count' => 22,
+                // ✅ Champ pour le modal
+                'configuration' => "! Cisco ASR 1001-X Configuration\nhostname RTR-CORE-PARIS-01\n",
+                'notes' => 'Routeur core principal',
             ],
         ];
         
@@ -112,7 +53,13 @@ class RouterSeeder extends Seeder
             $this->createAccessLogs($router, $users);
         }
         
+        // Créer 7 routeurs supplémentaires avec la factory
         Router::factory()->count(7)->create()->each(function ($router) use ($users) {
+            // ✅ Ajouter les champs manquants après création
+            $router->update([
+                'interfaces_count' => rand(12, 48),
+                'interfaces_up_count' => rand(10, $router->interfaces_count ?? 24),
+            ]);
             $this->createAccessLogs($router, $users);
         });
         
@@ -121,16 +68,43 @@ class RouterSeeder extends Seeder
     
     private function createAccessLogs($router, $users)
     {
+        $actions = [
+            AccessLog::TYPE_BACKUP,
+            AccessLog::TYPE_VIEW,
+            AccessLog::TYPE_UPDATE,
+            AccessLog::TYPE_LOGIN,
+        ];
+        
         for ($i = 0; $i < rand(3, 7); $i++) {
+            $createdAt = now()->subHours(rand(1, 720));
+            
             AccessLog::create([
                 'device_type' => Router::class,
                 'device_id' => $router->id,
                 'user_id' => $users->random()->id,
-                'username' => $router->username,
                 'ip_address' => '192.168.' . rand(1, 254) . '.' . rand(1, 254),
-                'action' => ['backup', 'config_change', 'view', 'interface_update'][array_rand(['backup', 'config_change', 'view', 'interface_update'])],
-                'accessed_at' => now()->subHours(rand(1, 720)),
+                'user_agent' => $this->getRandomUserAgent(),
+                'action' => $actions[array_rand($actions)],
+                'method' => ['GET', 'POST', 'PUT'][array_rand(['GET', 'POST', 'PUT'])],
+                'url' => '/api/routers/' . $router->id,
+                'result' => rand(0, 10) > 1 ? AccessLog::RESULT_SUCCESS : AccessLog::RESULT_FAILED,
+                'response_code' => rand(0, 10) > 1 ? 200 : 403,
+                'response_time' => rand(50, 500) / 100,
+                'parameters' => json_encode(['router_id' => $router->id]),
+                'browser' => ['Chrome', 'Firefox', 'Safari'][array_rand(['Chrome', 'Firefox', 'Safari'])],
+                'platform' => ['Windows', 'macOS', 'Linux'][array_rand(['Windows', 'macOS', 'Linux'])],
+                'created_at' => $createdAt,
+                'updated_at' => $createdAt,
             ]);
         }
+    }
+    
+    private function getRandomUserAgent()
+    {
+        $agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        ];
+        return $agents[array_rand($agents)];
     }
 }
