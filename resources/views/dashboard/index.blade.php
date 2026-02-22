@@ -544,10 +544,6 @@
             // ──────────────────────────────────────────────────────────
             // Chart.js
             // ──────────────────────────────────────────────────────────
-            /**
-             * ✅ CORRECTION : getCtx() vérifie que l'élément existe ET est visible
-             * (offsetParent === null → élément caché → Chart.js plante avec "t is null")
-             */
             getCtx(id) {
                 const el = document.getElementById(id);
                 if (!el) {
@@ -562,11 +558,9 @@
             },
 
             initCharts() {
-                // Détruire les anciens graphiques
                 Object.values(this.charts).forEach(c => c?.destroy());
                 this.charts = {};
 
-                // 1 - Répartition des équipements
                 const ctx1 = this.getCtx('deviceDistributionChart');
                 if (ctx1) {
                     this.charts.deviceDistribution = new Chart(ctx1, {
@@ -600,7 +594,6 @@
                     });
                 }
 
-                // 2 - Disponibilité hebdomadaire
                 const ctx2 = this.getCtx('availabilityChart');
                 if (ctx2) {
                     this.charts.availability = new Chart(ctx2, {
@@ -624,7 +617,6 @@
                     });
                 }
 
-                // 3 - Incidents
                 const ctx3 = this.getCtx('incidentsChart');
                 if (ctx3) {
                     this.charts.incidents = new Chart(ctx3, {
@@ -642,7 +634,6 @@
                     });
                 }
 
-                // 4 - Charge des équipements
                 const ctx4 = this.getCtx('loadChart');
                 if (ctx4) {
                     this.charts.load = new Chart(ctx4, {
@@ -678,7 +669,6 @@
 
             // ──────────────────────────────────────────────────────────
             // Filtres
-            // ✅ CORRECTION : tous les filtres comparent des strings
             // ──────────────────────────────────────────────────────────
             get filteredSites() {
                 return this.sites.filter(s => {
@@ -694,7 +684,6 @@
                 return this.switches.filter(sw => {
                     const q = this.filters.switches.search.toLowerCase();
                     if (q && !(sw.name?.toLowerCase() || '').includes(q)) return false;
-                    // ✅ status est maintenant une string (active|warning|danger)
                     if (this.filters.switches.status && sw.status !== this.filters.switches.status) return false;
                     if (this.filters.switches.site   && sw.site   !== this.filters.switches.site)   return false;
                     return true;
@@ -705,7 +694,6 @@
                 return this.routers.filter(rt => {
                     const q = this.filters.routers.search.toLowerCase();
                     if (q && !(rt.name?.toLowerCase() || '').includes(q)) return false;
-                    // ✅ CORRECTION : comparer avec string comme les switches
                     if (this.filters.routers.status && rt.status !== this.filters.routers.status) return false;
                     if (this.filters.routers.site   && rt.site   !== this.filters.routers.site)   return false;
                     return true;
@@ -716,7 +704,6 @@
                 return this.firewalls.filter(fw => {
                     const q = this.filters.firewalls.search.toLowerCase();
                     if (q && !(fw.name?.toLowerCase() || '').includes(q)) return false;
-                    // ✅ CORRECTION : comparer avec string comme les switches
                     if (this.filters.firewalls.status && fw.status !== this.filters.firewalls.status) return false;
                     if (this.filters.firewalls.site   && fw.site   !== this.filters.firewalls.site)   return false;
                     return true;
@@ -827,12 +814,25 @@
                 const el = document.getElementById(id);
                 if (el) el.style.display = 'flex';
             },
+
+            // ✅ FIX 1 — masquer l'élément EN PREMIER, puis réinitialiser l'état.
+            //
+            // Ancien ordre (bugué) :
+            //   1. this.modalData = {}          ← Alpine re-render → renderEquipmentDetails()
+            //                                      voit item=undefined → affiche "Aucune donnée"
+            //   2. el.style.display = 'none'    ← trop tard, le flash est déjà visible
+            //
+            // Nouvel ordre (correct) :
+            //   1. el.style.display = 'none'    ← modal masqué immédiatement, aucun re-render visible
+            //   2. this.$nextTick(reset)         ← reset après que le DOM a rendu le masquage
             closeModal(id) {
                 const el = document.getElementById(id);
-                if (el) el.style.display = 'none';
-                this.currentModal = null;
-                this.modalData    = {};
-                this.formData     = {};
+                if (el) el.style.display = 'none';     // ← masquer EN PREMIER
+                this.$nextTick(() => {                  // ← reset après masquage
+                    this.currentModal = null;
+                    this.modalData    = {};
+                    this.formData     = {};
+                });
             },
 
             // ──────────────────────────────────────────────────────────
@@ -1001,7 +1001,6 @@
             renderDetails() {
                 const { item } = this.modalData;
                 if (!item) return '';
-                // ✅ status est maintenant une string → adapter le test
                 const isActive = item.status === 'active' || item.status === true;
                 let html = '<div class="equipment-details">';
                 html += `<div class="detail-section"><h4><i class="fas fa-info-circle"></i> Infos générales</h4><div class="detail-grid">`;
@@ -1023,9 +1022,12 @@
                 return html;
             },
 
+            // ✅ FIX 2 — retourner '' (chaîne vide) quand item est absent,
+            //    jamais de texte visible. La div x-html="..." sera simplement vide
+            //    pendant le micro-tick entre masquage et reset, sans rien afficher.
             renderEquipmentDetails() {
                 const { item, type } = this.modalData;
-                if (!item) return '<p>Aucune donnée disponible</p>';
+                if (!item) return '';   // ← '' au lieu de '<p>Aucune donnée disponible</p>'
 
                 const isActive = item.status === 'active' || item.status === true;
                 let html = '<div style="display:grid;gap:24px;">';
