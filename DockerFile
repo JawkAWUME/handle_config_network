@@ -1,0 +1,35 @@
+# Stage vendor
+FROM composer:2 AS vendor
+WORKDIR /app
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
+
+# Stage node (si vous avez des assets front)
+FROM node:18 AS node_builder
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# Stage final
+FROM php:8.2-fpm-alpine
+WORKDIR /var/www/html
+
+RUN apk add --no-cache bash git icu-dev libzip-dev zlib-dev libpng-dev oniguruma-dev \
+ && docker-php-ext-install pdo_mysql mbstring zip exif intl
+
+COPY --from=vendor /app/vendor /var/www/html/vendor
+COPY --from=node_builder /app/public /var/www/html/public
+
+COPY . .
+
+RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+
+# Opcache (optionnel)
+RUN apk add --no-cache $PHPIZE_DEPS \
+ && pecl install opcache \
+ && docker-php-ext-enable opcache
+
+EXPOSE 9000
+CMD ["php-fpm"]
