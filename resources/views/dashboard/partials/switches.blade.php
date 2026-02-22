@@ -1,5 +1,14 @@
+{{--
+    dashboard/partials/switches.blade.php
+    ─────────────────────────────────────
+    CORRECTIONS appliquées :
+    ✅ Plus d'@include de switches-modals (modaux centralisés dans modals.blade.php)
+    ✅ viewItem() utilisé à la place de viewEquipmentDetails() → alimente equipmentDetailsModal
+    ✅ Filtres status comparent des strings (active|warning|danger)
+--}}
 <div class="fade-in">
-    {{-- ── Filtres ── --}}
+
+    {{-- ── Filtres ─────────────────────────────────────────────────── --}}
     <div class="filters-section">
         <div class="search-box">
             <i class="fas fa-search"></i>
@@ -10,15 +19,12 @@
         <div class="filter-group">
             <select class="filter-select" x-model="filters.switches.status">
                 <option value="">Tous les statuts</option>
-                {{-- ✅ Les valeurs correspondent aux strings renvoyées par le controller --}}
                 <option value="active">Actif</option>
                 <option value="warning">Avertissement</option>
                 <option value="danger">Critique</option>
             </select>
-
             <select class="filter-select" x-model="filters.switches.site">
                 <option value="">Tous les sites</option>
-                {{-- ✅ sites = sitesForJs → tableau [{id, name}] --}}
                 <template x-for="site in sites" :key="site.id">
                     <option :value="site.name" x-text="site.name"></option>
                 </template>
@@ -26,7 +32,7 @@
         </div>
     </div>
 
-    {{-- ── Section table ── --}}
+    {{-- ── Section table ───────────────────────────────────────────── --}}
     <section class="equipment-section">
         <div class="section-header">
             <h2 class="section-title">
@@ -64,17 +70,14 @@
                 <tbody>
                     <template x-for="sw in filteredSwitches" :key="sw.id">
                         <tr>
-                            {{-- Nom / Modèle --}}
                             <td>
                                 <strong x-text="sw.name"></strong><br>
                                 <small class="text-muted" x-text="sw.model || 'N/A'"></small><br>
                                 <small class="text-muted" x-text="sw.brand || ''"></small>
                             </td>
 
-                            {{-- Site : sw.site est maintenant une STRING (nom du site) --}}
                             <td x-text="sw.site || 'N/A'"></td>
 
-                            {{-- IPs --}}
                             <td>
                                 <div>
                                     <code x-text="sw.ip_nms || 'N/A'"></code>
@@ -86,13 +89,11 @@
                                 </div>
                             </td>
 
-                            {{-- Ports / VLANs : sw.ports est le label "32/48 ports" --}}
                             <td>
                                 <div x-text="sw.ports || 'N/A'"></div>
                                 <small><span x-text="sw.vlans || 0"></span> VLAN(s)</small>
                             </td>
 
-                            {{-- Dernier accès --}}
                             <td>
                                 <div style="font-size:.85rem">
                                     <i class="fas fa-user" style="color:var(--accent-color)"></i>
@@ -103,7 +104,7 @@
                                 </div>
                             </td>
 
-                            {{-- ✅ Statut : sw.status est une STRING (active|warning|danger) --}}
+                            {{-- status est une STRING (active|warning|danger) --}}
                             <td>
                                 <span class="status-badge"
                                       :class="{
@@ -117,12 +118,12 @@
                                 </span>
                             </td>
 
-                            {{-- Actions --}}
                             <td>
                                 <div class="action-buttons">
+                                    {{-- viewItem() → ouvre equipmentDetailsModal --}}
                                     <button class="btn btn-outline btn-sm btn-icon"
                                             title="Voir"
-                                            @click="viewEquipmentDetails('switch', sw)">
+                                            @click="viewItem('switches', sw.id)">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                     <button class="btn btn-outline btn-sm btn-icon"
@@ -147,10 +148,11 @@
                         </tr>
                     </template>
 
-                    {{-- État vide --}}
                     <tr x-show="filteredSwitches.length === 0">
-                        <td colspan="7" class="text-center py-5" style="padding:40px;text-align:center;color:var(--text-light)">
-                            <i class="fas fa-exchange-alt fa-3x" style="opacity:.3;display:block;margin-bottom:12px"></i>
+                        <td colspan="7"
+                            style="padding:40px;text-align:center;color:var(--text-light)">
+                            <i class="fas fa-exchange-alt fa-3x"
+                               style="opacity:.3;display:block;margin-bottom:12px"></i>
                             Aucun switch trouvé
                         </td>
                     </tr>
@@ -158,6 +160,5 @@
             </table>
         </div>
     </section>
-</div>
 
-@include('dashboard.modals.switches-modals')
+</div>
