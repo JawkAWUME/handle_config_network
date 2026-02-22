@@ -86,8 +86,11 @@ class FirewallSeeder extends Seeder
             $createdAt = now()->subHours(rand(1, 720));
             
             AccessLog::create([
+                // ✅ Polymorphic relation
                 'device_type' => Firewall::class,
                 'device_id' => $firewall->id,
+                
+                // ✅ User info
                 'user_id' => $users->random()->id,
                 'ip_address' => '192.168.' . rand(1, 254) . '.' . rand(1, 254),
                 'user_agent' => $this->getRandomUserAgent(),
@@ -102,7 +105,32 @@ class FirewallSeeder extends Seeder
                     'firewall_name' => $firewall->name,
                 ]),
                 'browser' => $this->getRandomBrowser(),
+                'platform' => $this->getRandomPlatform(),                
+                // ✅ Connection details
+                'ip_address' => '192.168.' . rand(1, 254) . '.' . rand(1, 254),
+                'user_agent' => $this->getRandomUserAgent(),
+                
+                // ✅ Action details
+                'action' => $actions[array_rand($actions)],
+                'method' => $this->getRandomMethod(),
+                'url' => '/api/firewalls/' . $firewall->id,
+                
+                // ✅ Response details
+                'result' => $results[array_rand($results)],
+                'response_code' => rand(0, 10) > 1 ? 200 : 403,
+                'response_time' => rand(50, 500) / 100, // 0.5 à 5 secondes
+                
+                // ✅ Optional metadata
+                'parameters' => json_encode([
+                    'firewall_id' => $firewall->id,
+                    'firewall_name' => $firewall->name,
+                    'action_type' => 'configuration'
+                ]),
+                
+                // ✅ Browser/Platform info (sera enrichi automatiquement par le modèle)
+                'browser' => $this->getRandomBrowser(),
                 'platform' => $this->getRandomPlatform(),
+                // ✅ Timestamps
                 'created_at' => $createdAt,
                 'updated_at' => $createdAt,
             ]);
