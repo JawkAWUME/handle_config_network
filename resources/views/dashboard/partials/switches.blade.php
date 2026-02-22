@@ -159,3 +159,5 @@
         </div>
     </section>
 </div>
+
+@include('dashboard.modals.switches-modals')

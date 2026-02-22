@@ -109,6 +109,15 @@ Route::middleware('auth')->group(function () {
         });
 
     });
+    Route::prefix('api/sites')->name('api.sites.')->group(function () {
+        Route::get('/list',    [SiteController::class, 'getSites']);
+        Route::get('/{id}',   [SiteController::class, 'getSite']);
+        Route::post('/',      [SiteController::class, 'store']);
+        Route::put('/{id}',   [SiteController::class, 'update']);
+        Route::delete('/{id}',[SiteController::class, 'destroy']);
+    });
+
+    Route::get('/sites/export', [SiteController::class, 'export'])->name('sites.export');
 
 
     /*

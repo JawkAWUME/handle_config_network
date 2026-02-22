@@ -36,7 +36,7 @@ class DashboardController extends Controller
         // ============================================================
 
         $sites = Gate::allows('viewAny', Site::class)
-            ? Site::with(['switches', 'routers', 'firewalls'])->get()
+            ? Site::withCount(['switches', 'routers', 'firewalls'])->get()
             : collect();
 
         $switchCollection = Gate::allows('viewAny', SwitchModel::class)
@@ -287,9 +287,20 @@ class DashboardController extends Controller
         //    le JSON et peuvent provoquer des erreurs de sérialisation.
         // ============================================================
 
-        $sitesForJs = $sites->map(fn($s) => [
-            'id'   => $s->id,
-            'name' => $s->name,
+      $sitesForJs = $sites->map(fn($s) => [
+            'id'              => $s->id,
+            'name'            => $s->name,
+            // 'code'            => $s->code ?? $s->id,   // pas de 'code' dans ta migration !
+            'address'         => $s->address,
+            'postal_code'     => $s->postal_code,
+            'city'            => $s->city,
+            'country'         => $s->country,
+            'contact_name'    => $s->technical_contact, // ← mapping
+            'contact_email'   => $s->technical_email,   // ← mapping
+            'contact_phone'   => $s->phone,             // ← mapping
+            'switches_count'  => $s->switches_count,
+            'routers_count'   => $s->routers_count,
+            'firewalls_count' => $s->firewalls_count,
         ])->values()->toArray();
 
         return view('dashboard.index', compact(

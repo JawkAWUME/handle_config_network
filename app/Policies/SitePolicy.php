@@ -35,7 +35,7 @@ class SitePolicy
     /**
      * Déterminer si l'utilisateur peut mettre à jour un site
      */
-    public function update(User $user, Site $site): bool
+    public function update(User $user): bool
     {
         return $user->hasAnyRole(['admin', 'engineer']);
     }
@@ -53,10 +53,19 @@ class SitePolicy
         return $user->hasRole('admin');
     }
 
+    public function updateAny(User $user): bool
+    {
+        return $user->hasAnyRole(['admin', 'engineer']);
+    }
+
+    public function deleteAny(User $user): bool
+    {
+        return $user->hasRole('admin');
+    }
     /**
      * Déterminer si l'utilisateur peut exporter les données du site
      */
-    public function export(User $user, Site $site): bool
+    public function export(User $user): bool
     {
         return $user->hasAnyRole(['admin', 'engineer', 'viewer']);
     }

@@ -856,7 +856,7 @@
                     this.currentModal = 'test';
                     this.modalTitle   = `Test de connectivité : ${item.name}`;
                     this.modalData    = { type, item, results: result };
-                    this.showModal('testConnectivityModal');
+                    this.showModal('switchTestConnectivityModal');
                 } catch (e) { console.error(e); }
             },
 
@@ -995,7 +995,7 @@
             // ──────────────────────────────────────────────────────────
             viewEquipmentDetails(type, item) {
                 this.modalData = { type, item };
-                this.showModal('equipmentDetailsModal');
+                this.showModal('viewEquipmentModal');
             },
 
             renderDetails() {
