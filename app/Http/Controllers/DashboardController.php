@@ -225,11 +225,11 @@ class DashboardController extends Controller
                 'total'   => $allUsers->count(),
                 'active'  => $allUsers->where('is_active', true)->count(),
                 'admins'  => $allUsers->where('role', 'admin')->count(),
-                'agents'  => $allUsers->where('role', 'agent')->count(),
+                'agents'  => $allUsers->where('role', 'technician')->count(),
                 'viewers' => $allUsers->where('role', 'viewer')->count(),
             ];
         }
-
+    
         // 12. Permissions
         $can = [
             'create'          => Gate::allows('create', Site::class),

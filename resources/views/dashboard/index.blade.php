@@ -459,6 +459,25 @@
 
         /* ── [x-cloak] ── */
         [x-cloak] { display: none !important; }
+        .avatar-base {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: white;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15), inset 0 0 0 1px rgba(255,255,255,0.3);
+            border: 2px solid rgba(255,255,255,0.2);
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: transform 0.2s ease;
+        }
+        .avatar-base:hover {
+            transform: scale(1.05);
+        }
     </style>
 </head>
 <body x-data="dashboardApp()" x-init="init()">
@@ -618,6 +637,11 @@
         <div x-show="toast.show" :class="'toast toast-' + toast.type" x-text="toast.message"></div>
     </div>
 
+    @if($can['manageUsers'] ?? false)
+        <div x-show="currentTab === 'users'" x-cloak class="fade-in">
+          @include('dashboard.partials.users')
+        </div>
+    @endif
     <script>
     function dashboardApp() {
         return {
@@ -625,7 +649,7 @@
             switches:  @json($switches   ?? []),
             routers:   @json($routers    ?? []),
             firewalls: @json($firewalls  ?? []),
-            users: @json($usersForJs ?? []),
+            users:     @json($usersForJs ?? []),
             userTotals: @json($userTotals ?? []),
             currentUser:@json($currentUser  ?? []),
             totals:    @json($totalsSafe),
@@ -1102,7 +1126,7 @@
             // ✅ FIX 2 — retourner '' (chaîne vide) quand item est absent,
             //    jamais de texte visible. La div x-html="..." sera simplement vide
             //    pendant le micro-tick entre masquage et reset, sans rien afficher.
-            renderEquipmentDetails() {
+                    renderEquipmentDetails() {
                         const { item, type } = this.modalData;
                         if (!item) return '';
 
@@ -1347,7 +1371,7 @@
                 };
                 reader.readAsText(file);
             },
-            
+
             async deleteUser(id) {
                 if (!confirm('Supprimer définitivement cet utilisateur ?')) return;
                 const result = await this.apiRequest(`/api/users/${id}`, 'DELETE');
