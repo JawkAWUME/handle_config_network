@@ -113,16 +113,6 @@
                                             @click="viewItem('routers', rt.id)">
                                         <i class="fas fa-eye"></i>
                                     </button>
-                                    <button class="btn btn-outline btn-sm btn-icon"
-                                            title="Tester"
-                                            @click="testConnectivity('router', rt.id)">
-                                        <i class="fas fa-plug"></i>
-                                    </button>
-                                    <button class="btn btn-outline btn-sm btn-icon"
-                                            title="Mettre à jour les interfaces"
-                                            @click="updateInterfaces(rt.id)">
-                                        <i class="fas fa-ethernet"></i>
-                                    </button>
                                     @can('delete', App\Models\Router::class)
                                     <button class="btn btn-outline btn-sm btn-icon"
                                             title="Supprimer"

@@ -114,11 +114,6 @@
                                         <i class="fas fa-eye"></i>
                                     </button>
                                     <button class="btn btn-outline btn-sm btn-icon"
-                                            title="Tester"
-                                            @click="testConnectivity('firewall', fw.id)">
-                                        <i class="fas fa-plug"></i>
-                                    </button>
-                                    <button class="btn btn-outline btn-sm btn-icon"
                                             title="Politiques de sécurité"
                                             @click="updateSecurityPolicies(fw.id)">
                                         <i class="fas fa-shield-alt"></i>

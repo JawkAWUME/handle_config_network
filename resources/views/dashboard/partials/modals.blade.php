@@ -682,6 +682,10 @@
      MODAL 4 : CONFIGURATION DES PORTS — SWITCH uniquement
      Condition : currentModal === 'configurePorts'
      ══════════════════════════════════════════════════════════════════════ --}}
+{{-- ══════════════════════════════════════════════════════════════════════
+     MODAL 4 : CONFIGURATION DES PORTS — SWITCH uniquement
+     Condition : currentModal === 'configurePorts'
+     ══════════════════════════════════════════════════════════════════════ --}}
 <div id="configurePortsModal"
      x-show="currentModal === 'configurePorts'"
      x-cloak
@@ -734,31 +738,43 @@
                 </div>
             </div>
 
-            {{-- Configuration JSON --}}
+            {{-- Upload de fichier JSON --}}
+            <div style="background:#f8fafc;padding:20px;
+                        border-radius:var(--border-radius);
+                        border-left:4px solid var(--success-color);">
+                <h4 style="color:var(--success-color);margin:0 0 16px;display:flex;align-items:center;gap:8px;">
+                    <i class="fas fa-upload"></i> Charger un fichier de configuration
+                </h4>
+                <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+                    <input type="file"
+                           accept=".json,application/json"
+                           id="portConfigFile"
+                           style="flex:1; padding:8px; border:2px solid var(--border-color); border-radius:var(--border-radius);">
+                    <button class="btn btn-primary"
+                            style="background:linear-gradient(135deg,var(--success-color),#059669);"
+                            @click="uploadPortConfig()">
+                        <i class="fas fa-file-upload"></i> Charger
+                    </button>
+                </div>
+                <p style="margin:8px 0 0;font-size:.8rem;color:var(--text-light);">
+                    <i class="fas fa-info-circle"></i> Sélectionnez un fichier JSON conforme au format attendu.
+                </p>
+            </div>
+
+            {{-- Affichage de la configuration actuelle (lecture seule) --}}
             <div style="background:#f8fafc;padding:20px;
                         border-radius:var(--border-radius);
                         border-left:4px solid var(--success-color);">
                 <h4 style="color:var(--success-color);margin:0 0 12px;display:flex;align-items:center;gap:8px;">
-                    <i class="fas fa-code"></i> Configuration des ports
-                    <span style="font-weight:400;font-size:.8rem;color:var(--text-light);">(JSON — port, status, vlan, description)</span>
+                    <i class="fas fa-code"></i> Configuration actuelle
+                    <span style="font-weight:400;font-size:.8rem;color:var(--text-light);">(JSON — lecture seule)</span>
                 </h4>
-                <textarea x-model="formData.portConfiguration"
-                          rows="10"
-                          placeholder='[
-  { "port": 1, "status": "enabled", "vlan": 100, "description": "Serveur Web" },
-  { "port": 2, "status": "disabled", "vlan": 200, "description": "Réservé" }
-]'
-                          style="width:100%;padding:12px 14px;border:2px solid var(--border-color);
-                                 border-radius:var(--border-radius);font-family:monospace;
-                                 font-size:.85rem;line-height:1.7;resize:vertical;
-                                 transition:var(--transition);color:var(--text-color);"
-                          onfocus="this.style.borderColor='var(--success-color)'"
-                          onblur="this.style.borderColor='var(--border-color)'"></textarea>
-                <p style="margin:8px 0 0;font-size:.8rem;color:var(--text-light);">
-                    <i class="fas fa-info-circle"></i>
-                    Valeurs acceptées pour <code>status</code> : <code>enabled</code> | <code>disabled</code>.
-                    <code>vlan</code> entre 1 et 4094.
-                </p>
+                <pre style="background:white; padding:12px; border:2px solid var(--border-color);
+                           border-radius:var(--border-radius); font-family:monospace;
+                           font-size:.85rem; line-height:1.6; overflow-x:auto; white-space:pre-wrap;
+                           max-height:300px; color:var(--text-color);"
+                     x-text="formData.portConfiguration || 'Aucune configuration chargée'">
+                </pre>
             </div>
 
         </div>
@@ -780,7 +796,6 @@
 
     </div>
 </div>
-
 
 {{-- ══════════════════════════════════════════════════════════════════════
      MODAL 5 : MISE À JOUR DES INTERFACES — ROUTEUR uniquement
@@ -962,44 +977,43 @@
                 </div>
             </div>
 
-            {{-- Configuration JSON --}}
+            {{-- Upload de fichier JSON --}}
+            <div style="background:#f8fafc;padding:20px;
+                        border-radius:var(--border-radius);
+                        border-left:4px solid var(--danger-color);">
+                <h4 style="color:var(--danger-color);margin:0 0 16px;display:flex;align-items:center;gap:8px;">
+                    <i class="fas fa-upload"></i> Charger un fichier de politiques
+                </h4>
+                <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+                    <input type="file"
+                           accept=".json,application/json"
+                           id="securityPoliciesFile"
+                           style="flex:1; padding:8px; border:2px solid var(--border-color); border-radius:var(--border-radius);">
+                    <button class="btn btn-primary"
+                            style="background:linear-gradient(135deg,var(--danger-color),#dc2626);"
+                            @click="uploadSecurityPolicies()">
+                        <i class="fas fa-file-upload"></i> Charger
+                    </button>
+                </div>
+                <p style="margin:8px 0 0;font-size:.8rem;color:var(--text-light);">
+                    <i class="fas fa-info-circle"></i> Sélectionnez un fichier JSON conforme au format attendu.
+                </p>
+            </div>
+
+            {{-- Affichage des politiques actuelles (lecture seule) --}}
             <div style="background:#f8fafc;padding:20px;
                         border-radius:var(--border-radius);
                         border-left:4px solid var(--danger-color);">
                 <h4 style="color:var(--danger-color);margin:0 0 12px;display:flex;align-items:center;gap:8px;">
-                    <i class="fas fa-code"></i> Politiques de sécurité
-                    <span style="font-weight:400;font-size:.8rem;color:var(--text-light);">(JSON — name, src, dst, action, port)</span>
+                    <i class="fas fa-code"></i> Politiques actuelles
+                    <span style="font-weight:400;font-size:.8rem;color:var(--text-light);">(JSON — lecture seule)</span>
                 </h4>
-                <textarea x-model="formData.securityPolicies"
-                          rows="12"
-                          placeholder='[
-  {
-    "name": "Allow-HTTP",
-    "source": "192.168.1.0/24",
-    "destination": "0.0.0.0/0",
-    "port": 80,
-    "protocol": "TCP",
-    "action": "allow"
-  },
-  {
-    "name": "Block-Telnet",
-    "source": "0.0.0.0/0",
-    "destination": "0.0.0.0/0",
-    "port": 23,
-    "protocol": "TCP",
-    "action": "deny"
-  }
-]'
-                          style="width:100%;padding:12px 14px;border:2px solid var(--border-color);
-                                 border-radius:var(--border-radius);font-family:monospace;
-                                 font-size:.85rem;line-height:1.7;resize:vertical;
-                                 transition:var(--transition);color:var(--text-color);"
-                          onfocus="this.style.borderColor='var(--danger-color)'"
-                          onblur="this.style.borderColor='var(--border-color)'"></textarea>
-                <p style="margin:8px 0 0;font-size:.8rem;color:var(--text-light);">
-                    <i class="fas fa-info-circle"></i>
-                    Valeurs acceptées pour <code>action</code> : <code>allow</code> | <code>deny</code> | <code>drop</code>.
-                </p>
+                <pre style="background:white; padding:12px; border:2px solid var(--border-color);
+                           border-radius:var(--border-radius); font-family:monospace;
+                           font-size:.85rem; line-height:1.6; overflow-x:auto; white-space:pre-wrap;
+                           max-height:300px; color:var(--text-color);"
+                     x-text="formData.securityPolicies || 'Aucune politique chargée'">
+                </pre>
             </div>
 
         </div>

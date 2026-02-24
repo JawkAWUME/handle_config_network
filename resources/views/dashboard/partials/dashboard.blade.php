@@ -22,10 +22,6 @@
                             <div class="stat-value" x-text="(totals.availability || 99.7) + '%'"></div>
                             <div class="stat-label">Disponibilité</div>
                         </div>
-                        <div class="welcome-stat">
-                            <div class="stat-value" x-text="totals.incidentsToday || 0"></div>
-                            <div class="stat-label">Incidents</div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -61,21 +57,6 @@
                 <div class="kpi-value" x-text="totals.switches || 0"></div>
                 <div class="kpi-label">Switchs</div>
                 <div class="kpi-trend trend-up"><i class="fas fa-arrow-up"></i> +0%</div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-icon"><i class="fas fa-bolt"></i></div>
-                <div class="kpi-value" x-text="(totals.availability || 99.7) + '%'"></div>
-                <div class="kpi-label">Disponibilité</div>
-                <div class="kpi-trend" :class="(totals.availability || 99.7) > 95 ? 'trend-up' : ''">
-                    <i class="fas" :class="(totals.availability || 99.7) > 95 ? 'fa-arrow-up' : 'fa-arrow-minus'"></i> 
-                    <span x-text="(totals.availability || 99.7) > 95 ? '+0.1%' : '±0%'"></span>
-                </div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-icon"><i class="fas fa-shield-alt"></i></div>
-                <div class="kpi-value">99.5%</div>
-                <div class="kpi-label">Sécurité</div>
-                <div class="kpi-trend trend-up"><i class="fas fa-arrow-up"></i> +0.3%</div>
             </div>
         </div>
     </section>

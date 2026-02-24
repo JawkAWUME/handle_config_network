@@ -52,13 +52,19 @@
                             </td>
                             <td>
                                 <div style="display: flex; gap: 12px; font-size: 0.85rem;">
-                                    <span class="status-badge status-danger" style="font-size: 0.75rem;">
+                                    {{-- Badge Firewalls cliquable --}}
+                                    <span class="status-badge status-danger" style="font-size: 0.75rem; cursor: pointer;" 
+                                          @click="showSiteEquipment(site.id, 'firewall')">
                                         <i class="fas fa-fire"></i> <span x-text="(site.firewalls_count || 0)"></span>
                                     </span>
-                                    <span class="status-badge status-info" style="font-size: 0.75rem;">
+                                    {{-- Badge Routeurs cliquable --}}
+                                    <span class="status-badge status-info" style="font-size: 0.75rem; cursor: pointer;" 
+                                          @click="showSiteEquipment(site.id, 'router')">
                                         <i class="fas fa-route"></i> <span x-text="(site.routers_count || 0)"></span>
                                     </span>
-                                    <span class="status-badge status-active" style="font-size: 0.75rem;">
+                                    {{-- Badge Switchs cliquable --}}
+                                    <span class="status-badge status-active" style="font-size: 0.75rem; cursor: pointer;" 
+                                          @click="showSiteEquipment(site.id, 'switch')">
                                         <i class="fas fa-exchange-alt"></i> <span x-text="(site.switches_count || 0)"></span>
                                     </span>
                                 </div>
@@ -114,7 +120,7 @@
 </div>
 
 {{-- ════════════════════════════════════════════════════════════
-     MODAL : Création / Édition d'un Site
+     MODAL : Création / Édition d'un Site (inchangé)
      ════════════════════════════════════════════════════════════ --}}
 <div id="createEquipmentModal"
      x-show="currentModal === 'create' && modalData.type === 'site'"
@@ -384,3 +390,103 @@
 
     </div>
 </div>
+
+{{-- ════════════════════════════════════════════════════════════
+     MODAL : Liste des équipements d'un site (nouveau)
+     ════════════════════════════════════════════════════════════ --}}
+<div id="viewSiteEquipmentModal"
+     x-show="currentModal === 'siteEquipment'"
+     x-cloak
+     style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.55); z-index: 1000;
+            align-items: center; justify-content: center;">
+
+    <div style="background: white; border-radius: var(--border-radius-lg);
+                width: 92%; max-width: 800px; max-height: 90vh; overflow-y: auto;
+                box-shadow: var(--card-shadow-hover); animation: fadeIn .3s ease;">
+
+        {{-- Header --}}
+        <div style="padding: 24px; border-bottom: 2px solid var(--border-color);
+                    display: flex; justify-content: space-between; align-items: center;
+                    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+                    color: white;
+                    border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;">
+            <h3 style="margin: 0; font-size: 1.5rem; display: flex; align-items: center; gap: 12px;">
+                <i class="fas" :class="{
+                    'fa-fire': modalSiteEquipmentType === 'firewall',
+                    'fa-route': modalSiteEquipmentType === 'router',
+                    'fa-exchange-alt': modalSiteEquipmentType === 'switch'
+                }"></i>
+                <span x-text="modalSiteEquipmentTitle"></span>
+            </h3>
+            <button @click="closeModal('viewSiteEquipmentModal')"
+                    style="background: rgba(255,255,255,0.2); border: none; color: white;
+                           font-size: 1.5rem; width: 40px; height: 40px; border-radius: 50%;
+                           cursor: pointer; transition: var(--transition);"
+                    onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                    onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        {{-- Body --}}
+        <div style="padding: 24px;">
+            <template x-if="modalSiteEquipmentList.length === 0">
+                <p style="text-align: center; color: var(--text-light); padding: 40px;">
+                    <i class="fas fa-info-circle fa-2x" style="margin-bottom: 12px; display: block;"></i>
+                    Aucun équipement de ce type sur ce site.
+                </p>
+            </template>
+            <template x-for="eq in modalSiteEquipmentList" :key="eq.id">
+                <div style="display: flex; align-items: center; justify-content: space-between;
+                            padding: 16px; border: 1px solid var(--border-color); border-radius: var(--border-radius);
+                            margin-bottom: 12px; background: white; transition: var(--transition);"
+                     @mouseenter="$el.style.borderColor = 'var(--primary-color)'; $el.style.boxShadow = 'var(--card-shadow)'"
+                     @mouseleave="$el.style.borderColor = 'var(--border-color)'; $el.style.boxShadow = 'none'">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <div style="font-size: 2rem; color: var(--primary-color);">
+                            <i class="fas" :class="{
+                                'fa-fire': modalSiteEquipmentType === 'firewall',
+                                'fa-route': modalSiteEquipmentType === 'router',
+                                'fa-exchange-alt': modalSiteEquipmentType === 'switch'
+                            }"></i>
+                        </div>
+                        <div>
+                            <div style="font-weight: 700;" x-text="eq.name"></div>
+                            <div style="font-size: 0.85rem; color: var(--text-light);">
+                                <span x-text="eq.model || 'Modèle N/A'"></span>
+                                <span x-show="eq.brand"> · <span x-text="eq.brand"></span></span>
+                            </div>
+                            <div style="font-size: 0.8rem; margin-top: 4px;">
+                                <span class="status-badge" :class="{
+                                    'status-active': eq.status === 'active',
+                                    'status-warning': eq.status === 'warning',
+                                    'status-danger': eq.status === 'danger'
+                                }" x-text="eq.status === 'active' ? 'Actif' : (eq.status === 'warning' ? 'Avertissement' : 'Critique')"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <button class="btn btn-outline btn-sm btn-icon" title="Voir détails"
+                                @click="viewItem(modalSiteEquipmentType + 's', eq.id); closeModal('viewSiteEquipmentModal')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        {{-- Footer --}}
+        <div style="padding: 20px 24px; border-top: 2px solid var(--border-color);
+                    display: flex; justify-content: flex-end; gap: 12px;
+                    background: #f8fafc;
+                    border-radius: 0 0 var(--border-radius-lg) var(--border-radius-lg);">
+            <button class="btn btn-outline" @click="closeModal('viewSiteEquipmentModal')">
+                <i class="fas fa-times"></i> Fermer
+            </button>
+        </div>
+
+    </div>
+</div>
+
+{{-- Ajout des propriétés et méthodes nécessaires dans l'objet Alpine --}}

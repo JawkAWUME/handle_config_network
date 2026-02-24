@@ -8,7 +8,7 @@ use App\Models\Site;
 use App\Models\SwitchModel;
 use App\Models\Router;
 use App\Models\Firewall;
-use App\Models\Alert;
+use App\Models\User;
 use App\Models\Backup;
 
 class DashboardController extends Controller
@@ -26,15 +26,7 @@ class DashboardController extends Controller
             return redirect()->route('login');
         }
 
-        // ============================================================
-        // 1. Collections Eloquent BRUTES
-        //
-        // ✅ Gate::allows() fonctionne maintenant car les policies sont
-        //    enregistrées dans AppServiceProvider::$policies.
-        //    Avant : SwitchModel → SwitchPolicy non détecté → false
-        //    Après : mapping explicite → true pour admin/engineer/viewer
-        // ============================================================
-
+        // 1. Collections Eloquent brutes
         $sites = Gate::allows('viewAny', Site::class)
             ? Site::withCount(['switches', 'routers', 'firewalls'])->get()
             : collect();
@@ -51,52 +43,31 @@ class DashboardController extends Controller
             ? Firewall::with(['site', 'accessLogs' => fn($q) => $q->latest()->limit(5)->with('user')])->get()
             : collect();
 
-        // ============================================================
-        // 2. Comptages sur les collections BRUTES
-        //    (avant ->map() qui transforme en tableaux PHP)
-        // ============================================================
-
+        // 2. Comptages
         $sitesCount     = $sites->count();
         $switchesCount  = $switchCollection->count();
         $routersCount   = $routerCollection->count();
         $firewallsCount = $firewallCollection->count();
 
-        // ============================================================
-        // 3. onlineStats — doit se faire sur la collection Eloquent
-        //    car ->where() sur un tableau PHP associatif ne fonctionne pas
-        // ============================================================
-
+        // 3. Stats en ligne
         $onlineStats = [
             'switches'  => $switchCollection->where('status', true)->count(),
             'routers'   => $routerCollection->where('status', true)->count(),
             'firewalls' => $firewallCollection->where('status', true)->count(),
         ];
 
-        // ============================================================
         // 4. Helper : booléen BDD → string Alpine.js
-        //
-        // La BDD stocke status=1/0, le cast 'boolean' donne true/false.
-        // Alpine.js compare avec les strings 'active' | 'warning' | 'danger'.
-        // ============================================================
-
         $toStatus = fn($status) => ($status === true || $status == 1) ? 'active' : 'danger';
 
-        // ============================================================
-        // 5. Transformation switches → tableau plat pour Alpine.js
-        // ============================================================
-
+        // 5. Switches → tableau plat
         $switches = $switchCollection->map(function ($sw) use ($toStatus) {
-            $lastLog    = $sw->accessLogs->first();
-            $portsLabel = $sw->ports_total
-                ? ($sw->ports_used ?? 0) . '/' . $sw->ports_total . ' ports'
-                : 'N/A';
-
+            $lastLog = $sw->accessLogs->first();
             return [
                 'id'               => $sw->id,
                 'name'             => $sw->name,
                 'brand'            => $sw->brand,
                 'model'            => $sw->model,
-                'status'           => $toStatus($sw->status),   // string
+                'status'           => $toStatus($sw->status),
                 'username'         => $sw->username,
                 'ip_nms'           => $sw->ip_nms,
                 'ip_service'       => $sw->ip_service,
@@ -104,16 +75,13 @@ class DashboardController extends Controller
                 'vlan_service'     => $sw->vlan_service,
                 'ports_total'      => $sw->ports_total,
                 'ports_used'       => $sw->ports_used,
-                'ports'            => $portsLabel,               // "32/48 ports"
                 'vlans'            => $sw->vlan_nms ?? 0,
                 'serial_number'    => $sw->serial_number,
                 'firmware_version' => $sw->firmware_version,
                 'updated_at'       => $sw->updated_at?->toISOString(),
-                'site'             => $sw->site?->name ?? 'N/A', // STRING
+                'site'             => $sw->site?->name ?? 'N/A',
                 'site_id'          => $sw->site_id,
-                'last_access_user' => $lastLog?->user?->name
-                                   ?? $lastLog?->ip_address
-                                   ?? 'Aucun accès',
+                'last_access_user' => $lastLog?->user?->name ?? $lastLog?->ip_address ?? 'Aucun accès',
                 'last_access_time' => $lastLog?->created_at?->toISOString(),
                 'access_logs'      => $sw->accessLogs->map(fn($log) => [
                     'id'         => $log->id,
@@ -121,20 +89,14 @@ class DashboardController extends Controller
                     'result'     => $log->result,
                     'ip_address' => $log->ip_address,
                     'created_at' => $log->created_at?->toISOString(),
-                    'user'       => $log->user
-                        ? ['id' => $log->user->id, 'name' => $log->user->name]
-                        : null,
+                    'user'       => $log->user ? ['id' => $log->user->id, 'name' => $log->user->name] : null,
                 ])->toArray(),
             ];
         })->values()->toArray();
 
-        // ============================================================
-        // 6. Transformation routers
-        // ============================================================
-
+        // 6. Routers → tableau plat
         $routers = $routerCollection->map(function ($rt) use ($toStatus) {
             $lastLog = $rt->accessLogs->first();
-
             return [
                 'id'                  => $rt->id,
                 'name'                => $rt->name,
@@ -154,9 +116,7 @@ class DashboardController extends Controller
                 'configuration'       => $rt->configuration,
                 'site'                => $rt->site?->name ?? 'N/A',
                 'site_id'             => $rt->site_id,
-                'last_access_user'    => $lastLog?->user?->name
-                                      ?? $lastLog?->ip_address
-                                      ?? 'Aucun accès',
+                'last_access_user'    => $lastLog?->user?->name ?? $lastLog?->ip_address ?? 'Aucun accès',
                 'last_access_time'    => $lastLog?->created_at?->toISOString(),
                 'access_logs'         => $rt->accessLogs->map(fn($log) => [
                     'id'         => $log->id,
@@ -164,20 +124,14 @@ class DashboardController extends Controller
                     'result'     => $log->result,
                     'ip_address' => $log->ip_address,
                     'created_at' => $log->created_at?->toISOString(),
-                    'user'       => $log->user
-                        ? ['id' => $log->user->id, 'name' => $log->user->name]
-                        : null,
+                    'user'       => $log->user ? ['id' => $log->user->id, 'name' => $log->user->name] : null,
                 ])->toArray(),
             ];
         })->values()->toArray();
 
-        // ============================================================
-        // 7. Transformation firewalls
-        // ============================================================
-
+        // 7. Firewalls → tableau plat
         $firewalls = $firewallCollection->map(function ($fw) use ($toStatus) {
             $lastLog = $fw->accessLogs->first();
-
             return [
                 'id'                      => $fw->id,
                 'name'                    => $fw->name,
@@ -198,9 +152,7 @@ class DashboardController extends Controller
                 'configuration'           => $fw->configuration,
                 'site'                    => $fw->site?->name ?? 'N/A',
                 'site_id'                 => $fw->site_id,
-                'last_access_user'        => $lastLog?->user?->name
-                                          ?? $lastLog?->ip_address
-                                          ?? 'Aucun accès',
+                'last_access_user'        => $lastLog?->user?->name ?? $lastLog?->ip_address ?? 'Aucun accès',
                 'last_access_time'        => $lastLog?->created_at?->toISOString(),
                 'access_logs'             => $fw->accessLogs->map(fn($log) => [
                     'id'         => $log->id,
@@ -208,32 +160,23 @@ class DashboardController extends Controller
                     'result'     => $log->result,
                     'ip_address' => $log->ip_address,
                     'created_at' => $log->created_at?->toISOString(),
-                    'user'       => $log->user
-                        ? ['id' => $log->user->id, 'name' => $log->user->name]
-                        : null,
+                    'user'       => $log->user ? ['id' => $log->user->id, 'name' => $log->user->name] : null,
                 ])->toArray(),
             ];
         })->values()->toArray();
 
-        // ============================================================
-        // 8. Totaux
-        // ============================================================
-
+        // 8. Totaux (plus d'incidents)
         $totals = [
-            'sites'          => $sitesCount,
-            'firewalls'      => $firewallsCount,
-            'routers'        => $routersCount,
-            'switches'       => $switchesCount,
-            'devices'        => $firewallsCount + $routersCount + $switchesCount,
-            'availability'   => 99.7,
-            'avgUptime'      => 45,
-            'incidentsToday' => Alert::whereDate('created_at', today())->count(),
+            'sites'        => $sitesCount,
+            'firewalls'    => $firewallsCount,
+            'routers'      => $routersCount,
+            'switches'     => $switchesCount,
+            'devices'      => $firewallsCount + $routersCount + $switchesCount,
+            'availability' => 99.7,
+            'avgUptime'    => 45,
         ];
 
-        // ============================================================
-        // 9. Chart data
-        // ============================================================
-
+        // 9. Chart data (plus d'incidentsData)
         $chartData = [
             'deviceDistribution' => [
                 'labels' => ['Firewalls', 'Routeurs', 'Switchs'],
@@ -244,10 +187,6 @@ class DashboardController extends Controller
                 'labels' => ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
                 'data'   => $this->getWeeklyAvailability(),
             ],
-            'incidentsData' => [
-                'labels' => ['Connexion', 'CPU', 'Mémoire', 'Bande Passante', 'Disque'],
-                'data'   => [0, 0, 0, 0, 0],
-            ],
             'loadData' => [
                 'labels'    => ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'],
                 'firewalls' => $this->getEquipmentLoad('firewall'),
@@ -256,20 +195,42 @@ class DashboardController extends Controller
             ],
         ];
 
-        // ============================================================
-        // 10. Récents / backups / alertes
-        // ============================================================
-
+        // 10. Récents / backups
         $recentSwitches  = $this->getRecentModels(SwitchModel::class);
         $recentRouters   = $this->getRecentModels(Router::class);
         $recentFirewalls = $this->getRecentModels(Firewall::class);
         $recentBackups   = Backup::latest()->limit(5)->get();
-        $activeAlerts    = Alert::where('status', 'open')->latest()->limit(5)->get();
 
-        // ============================================================
-        // 11. Permissions pour la vue Blade (@can / Alpine permissions)
-        // ============================================================
+        // 11. Utilisateurs (pour les admins)
+        $usersForJs = [];
+        $userTotals = [];
 
+        if ($user->role === 'admin') {
+            $allUsers = User::latest()->get();
+
+            $usersForJs = $allUsers->map(fn($u) => [
+                'id'         => $u->id,
+                'name'       => $u->name,
+                'email'      => $u->email,
+                'role'       => $u->role,
+                'department' => $u->department,
+                'phone'      => $u->phone,
+                'is_active'  => $u->is_active,
+                'created_at' => $u->created_at?->toISOString(),
+                'updated_at' => $u->updated_at?->toISOString(),
+                'is_current' => $u->id === $user->id,
+            ])->values()->toArray();
+
+            $userTotals = [
+                'total'   => $allUsers->count(),
+                'active'  => $allUsers->where('is_active', true)->count(),
+                'admins'  => $allUsers->where('role', 'admin')->count(),
+                'agents'  => $allUsers->where('role', 'agent')->count(),
+                'viewers' => $allUsers->where('role', 'viewer')->count(),
+            ];
+        }
+
+        // 12. Permissions
         $can = [
             'create'          => Gate::allows('create', Site::class),
             'export'          => Gate::allows('viewAny', Site::class),
@@ -277,35 +238,40 @@ class DashboardController extends Controller
             'viewAnySwitch'   => Gate::allows('viewAny', SwitchModel::class),
             'viewAnyRouter'   => Gate::allows('viewAny', Router::class),
             'viewAnyFirewall' => Gate::allows('viewAny', Firewall::class),
+            'manageUsers'     => $user->role === 'admin',
         ];
 
-        // ============================================================
-        // 12. Sites pour Alpine.js — tableau plat [{id, name}]
-        //
-        // ✅ NE PAS passer la collection Eloquent $sites directement dans
-        //    @json() : elle contient des relations imbriquées qui gonflent
-        //    le JSON et peuvent provoquer des erreurs de sérialisation.
-        // ============================================================
-
-      $sitesForJs = $sites->map(fn($s) => [
+        // 13. Sites pour Alpine.js
+        $sitesForJs = $sites->map(fn($s) => [
             'id'              => $s->id,
             'name'            => $s->name,
-            // 'code'            => $s->code ?? $s->id,   // pas de 'code' dans ta migration !
             'address'         => $s->address,
             'postal_code'     => $s->postal_code,
             'city'            => $s->city,
             'country'         => $s->country,
-            'contact_name'    => $s->technical_contact, // ← mapping
-            'contact_email'   => $s->technical_email,   // ← mapping
-            'contact_phone'   => $s->phone,             // ← mapping
+            'contact_name'    => $s->technical_contact,
+            'contact_email'   => $s->technical_email,
+            'contact_phone'   => $s->phone,
             'switches_count'  => $s->switches_count,
             'routers_count'   => $s->routers_count,
             'firewalls_count' => $s->firewalls_count,
         ])->values()->toArray();
 
+        // 14. Profil utilisateur connecté
+        $currentUser = [
+            'id'         => $user->id,
+            'name'       => $user->name,
+            'email'      => $user->email,
+            'role'       => $user->role,
+            'department' => $user->department,
+            'phone'      => $user->phone,
+            'is_active'  => $user->is_active,
+            'created_at' => $user->created_at?->toISOString(),
+        ];
+
         return view('dashboard.index', compact(
-            'sitesForJs',        // → Alpine : sites: @json($sitesForJs)
-            'sites',             // → Blade partials (@foreach)
+            'sitesForJs',
+            'sites',
             'switches',
             'routers',
             'firewalls',
@@ -315,16 +281,15 @@ class DashboardController extends Controller
             'recentRouters',
             'recentFirewalls',
             'recentBackups',
-            'activeAlerts',
             'onlineStats',
-            'can'
+            'can',
+            'usersForJs',
+            'userTotals',
+            'currentUser'
         ));
     }
 
-    // ================================================================
-    // Méthodes privées
-    // ================================================================
-
+    // Méthodes privées inchangées...
     private function getWeeklyAvailability(): array
     {
         return [99.2, 99.5, 99.8, 99.7, 99.6, 99.9, 99.4];
@@ -346,9 +311,4 @@ class DashboardController extends Controller
         }
         return $modelClass::with('site')->latest()->limit(3)->get();
     }
-
-    public function sites()     { return view('dashboard.sites'); }
-    public function switches()  { return view('dashboard.switches'); }
-    public function routers()   { return view('dashboard.routers'); }
-    public function firewalls() { return view('dashboard.firewalls'); }
 }
