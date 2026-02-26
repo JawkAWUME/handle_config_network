@@ -5,7 +5,6 @@
                 <i class="fas fa-users"></i> Gestion des utilisateurs
             </h2>
             <div class="section-actions">
-                {{-- ✅ FIX 1 — utilise 'users' (variable Alpine correcte) --}}
                 <span class="status-badge status-info" x-text="users.length + ' utilisateur(s)'"></span>
                 <button class="btn btn-primary" @click="openCreateModal('user')">
                     <i class="fas fa-user-plus"></i> Nouvel utilisateur
@@ -29,7 +28,6 @@
             </div>
             <div class="kpi-card" style="flex:1; min-width:140px; border-left-color:#f59e0b;">
                 <div class="kpi-value" style="color:#f59e0b;" x-text="userTotals.agents || 0"></div>
-                {{-- ✅ FIX 3 — 'agents' comptabilise 'agent' ET 'technician' dans le controller --}}
                 <div class="kpi-label">Agents</div>
             </div>
             <div class="kpi-card" style="flex:1; min-width:140px; border-left-color:#3b82f6;">
@@ -52,12 +50,10 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {{-- ✅ FIX 1 — itère sur 'users' (variable Alpine correcte) --}}
                     <template x-for="user in users" :key="user.id">
                         <tr :style="!user.is_active ? 'opacity:.65;' : ''">
                             <td>
                                 <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                                    <!-- Avatar avec initiale et dégradé selon le rôle -->
                                     <div class="avatar-base"
                                         :style="user.role === 'admin'
                                             ? 'background: radial-gradient(circle at 30% 30%, #ef4444, #b91c1c)'
@@ -66,29 +62,16 @@
                                                 : 'background: radial-gradient(circle at 30% 30%, #3b82f6, #1e40af)')">
                                         <span x-text="user.name?.charAt(0)?.toUpperCase() || '?'"></span>
                                     </div>
-                                    <!-- Informations utilisateur -->
-                                    <div style="min-width: 0; /* Pour permettre le texte tronqué si besoin */">
+                                    <div>
                                         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                            <span style="font-weight: 600; font-size: 0.95rem; color: var(--text-color);"
-                                                x-text="user.name"></span>
-
-                                            <!-- Badge "Vous" (visible uniquement pour l'utilisateur connecté) -->
-                                            <span x-show="user.is_current"
-                                                class="status-badge status-info"
-                                                style="font-size: 0.65rem; padding: 2px 8px; border-radius: 20px;">
-                                                Vous
-                                            </span>
+                                            <span style="font-weight: 600; font-size: 0.95rem;" x-text="user.name"></span>
+                                            <span x-show="user.is_current" class="status-badge status-info" style="font-size: 0.65rem; padding: 2px 8px;">Vous</span>
                                         </div>
-
-                                        <!-- Éventuellement une deuxième ligne (optionnelle) peut être ajoutée ici -->
                                     </div>
                                 </div>
                             </td>
                             <td style="font-size:.88rem;" x-text="user.email"></td>
                             <td>
-                                {{-- ✅ FIX 5 — le controller normalise déjà 'technician'→'agent'
-                                     dans $usersForJs avant @json(), donc user.role
-                                     vaut toujours 'admin'|'agent'|'viewer' ici. --}}
                                 <span class="status-badge" :class="{
                                     'status-danger':  user.role === 'admin',
                                     'status-warning': user.role === 'technician',
@@ -99,47 +82,29 @@
                                         'fa-user-cog': user.role === 'technician',
                                         'fa-eye':      user.role === 'viewer'
                                     }"></i>
-                                    <span x-text="user.role === 'admin'
-                                        ? 'Administrateur'
-                                        : (user.role === 'technician' ? 'Agent' : 'Lecteur')">
-                                    </span>
+                                    <span x-text="user.role === 'admin' ? 'Administrateur' : (user.role === 'technician' ? 'Agent' : 'Lecteur')"></span>
                                 </span>
                             </td>
-
-                            <td style="font-size:.88rem;color:var(--text-light);"
-                                x-text="user.department || '—'"></td>
-                            <td style="font-size:.88rem;color:var(--text-light);"
-                                x-text="user.phone || '—'"></td>
-
+                            <td style="font-size:.88rem;color:var(--text-light);" x-text="user.department || '—'"></td>
+                            <td style="font-size:.88rem;color:var(--text-light);" x-text="user.phone || '—'"></td>
                             <td>
-                                {{-- ✅ FIX 4 — is_active est maintenant un vrai booléen
-                                     (cast dans User model + (bool) dans controller)
-                                     '0' (string truthy) ne pose plus de problème --}}
-                                <span class="status-badge"
-                                      :class="user.is_active ? 'status-active' : 'status-danger'">
-                                    <i class="fas"
-                                       :class="user.is_active ? 'fa-check-circle' : 'fa-times-circle'"></i>
+                                <span class="status-badge" :class="user.is_active ? 'status-active' : 'status-danger'">
+                                    <i class="fas" :class="user.is_active ? 'fa-check-circle' : 'fa-times-circle'"></i>
                                     <span x-text="user.is_active ? 'Actif' : 'Inactif'"></span>
                                 </span>
                             </td>
-
                             <td>
                                 <div class="action-buttons">
-                                    <button class="btn btn-outline btn-sm btn-icon"
-                                            title="Modifier"
-                                            @click="editUser(user)">
+                                    <button class="btn btn-outline btn-sm btn-icon" title="Modifier" @click="editUser(user)">
                                         <i class="fas fa-edit"></i>
                                     </button>
-                                    <button class="btn btn-outline btn-sm btn-icon"
-                                            title="Activer / Désactiver"
+                                    <button class="btn btn-outline btn-sm btn-icon" title="Activer / Désactiver"
                                             :disabled="user.is_current"
                                             :style="user.is_current ? 'opacity:.4;cursor:not-allowed;' : ''"
                                             @click="!user.is_current && toggleUserStatus(user)">
-                                        <i class="fas"
-                                           :class="user.is_active ? 'fa-toggle-on' : 'fa-toggle-off'"></i>
+                                        <i class="fas" :class="user.is_active ? 'fa-toggle-on' : 'fa-toggle-off'"></i>
                                     </button>
-                                    <button class="btn btn-outline btn-sm btn-icon"
-                                            title="Supprimer"
+                                    <button class="btn btn-outline btn-sm btn-icon" title="Supprimer"
                                             :disabled="user.is_current"
                                             :style="user.is_current ? 'opacity:.4;cursor:not-allowed;' : ''"
                                             @click="!user.is_current && deleteUser(user.id)">
@@ -149,8 +114,6 @@
                             </td>
                         </tr>
                     </template>
-
-                    {{-- Message vide --}}
                     <tr x-show="users.length === 0">
                         <td colspan="7" style="padding:48px;text-align:center;color:var(--text-light);">
                             <i class="fas fa-users" style="font-size:2.5rem;opacity:.2;display:block;margin-bottom:12px;"></i>

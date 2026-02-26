@@ -594,10 +594,6 @@
                 'labels' => ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'],
                 'data'   => [99.2, 99.5, 99.8, 99.7, 99.6, 99.9, 99.4],
             ],
-            'incidentsData' => [
-                'labels' => ['Connexion','CPU','Mémoire','Bande Passante','Disque'],
-                'data'   => [0, 0, 0, 0, 0],
-            ],
             'loadData' => [
                 'labels'    => ['00:00','04:00','08:00','12:00','16:00','20:00'],
                 'firewalls' => [45, 48, 62, 68, 55, 50],
@@ -613,7 +609,7 @@
     @endphp
 
     <div class="dashboard-container">
-        <div x-show="currentTab === 'dashboard'" x-cloak>
+        <div x-show="currentTab === 'dashboard'">
             @include('dashboard.partials.dashboard')
         </div>
         <div x-show="currentTab === 'sites'" x-cloak>
@@ -686,9 +682,7 @@
             switchTab(tab) {
                 this.currentTab = tab;
                 if (tab === 'dashboard') {
-                    this.$nextTick(() => {
-                        this.$nextTick(() => this.initCharts());
-                    });
+                    this.waitForCanvasAndInit();
                 }
             },
 
@@ -703,11 +697,11 @@
             getCtx(id) {
                 const el = document.getElementById(id);
                 if (!el) {
-                    console.warn(`Canvas #${id} introuvable`);
+                    console.warn(`Canvas #${id} introuvable dans le DOM`);
                     return null;
                 }
-                if (el.offsetParent === null && el.style.display === 'none') {
-                    console.warn(`Canvas #${id} non visible`);
+                if (el.offsetWidth === 0 || el.offsetHeight === 0) {
+                    console.warn(`Canvas #${id} a des dimensions nulles (parent caché ?)`);
                     return null;
                 }
                 return el.getContext('2d');
@@ -773,23 +767,6 @@
                     });
                 }
 
-                const ctx3 = this.getCtx('incidentsChart');
-                if (ctx3) {
-                    this.charts.incidents = new Chart(ctx3, {
-                        type: 'bar',
-                        data: {
-                            labels: this.chartData.incidentsData.labels,
-                            datasets: [{
-                                label: "Nombre d'incidents",
-                                data: this.chartData.incidentsData.data,
-                                backgroundColor: ['#ef4444','#f59e0b','#0ea5e9','#10b981','#8b5cf6'],
-                            }],
-                        },
-                        options: { responsive: true, maintainAspectRatio: false,
-                                   scales: { y: { beginAtZero: true } } },
-                    });
-                }
-
                 const ctx4 = this.getCtx('loadChart');
                 if (ctx4) {
                     this.charts.load = new Chart(ctx4, {
@@ -817,10 +794,19 @@
                 if (!this.charts[chartId]) return;
                 const chart = this.charts[chartId];
                 const types = ['pie', 'bar', 'line'];
-                const next  = types[(types.indexOf(chart.config.type) + 1) % types.length];
-                chart.config.type = next;
-                chart.update();
-                this.showToast(`Graphique : ${next}`, 'info');
+                const nextType = types[(types.indexOf(chart.config.type) + 1) % types.length];
+                
+                const data = chart.config.data;
+                const options = chart.config.options;
+                const canvasId = chart.canvas.id;
+                
+                chart.destroy();
+                
+                const ctx = document.getElementById(canvasId)?.getContext('2d');
+                if (ctx) {
+                    this.charts[chartId] = new Chart(ctx, { type: nextType, data, options });
+                }
+                this.showToast(`Graphique : ${nextType}`, 'info');
             },
 
             // Filtres
@@ -842,6 +828,19 @@
                     if (this.filters.switches.site   && sw.site   !== this.filters.switches.site)   return false;
                     return true;
                 });
+            },
+
+            waitForCanvasAndInit(attempts = 0) {
+                if (attempts > 30) {
+                    this.initCharts();
+                    return;
+                }
+                const canvas = document.getElementById('deviceDistributionChart');
+                if (canvas && canvas.offsetWidth > 0) {
+                    this.initCharts();
+                } else {
+                    setTimeout(() => this.waitForCanvasAndInit(attempts + 1), 100);
+                }
             },
 
             get filteredRouters() {
@@ -902,6 +901,21 @@
                 if (type === 'router')   return { ...base, management_ip:'', interfaces_count: 24, interfaces_up_count: 22 };
                 if (type === 'firewall') return { ...base, security_policies_count: 0, cpu: 0, memory: 0 };
                 if (type === 'user')     return { name:'', email:'', password:'', password_confirmation:'', role:'agent', department:'', phone:'', is_active:true };
+                if (type === 'site')     return {
+                    name: '',
+                    code: '',
+                    address: '',
+                    city: '',
+                    country: '',
+                    postal_code: '',
+                    latitude: '',
+                    longitude: '',
+                    contact_name: '',
+                    contact_email: '',
+                    contact_phone: '',
+                    description: '',
+                    notes: ''
+                };
                 return base;
             },
 
@@ -932,10 +946,49 @@
                     } catch (e) { console.error(e); }
                     return;
                 }
-                const map  = { switch: '/api/switches', router: '/api/routers', firewall: '/api/firewalls' };
-                let url    = map[type];
+
+                if (type === 'site') {
+                    const method = this.modalData.id ? 'PUT' : 'POST';
+                    const url = this.modalData.id ? `/api/sites/${this.modalData.id}` : '/api/sites';
+                    try {
+                        const result = await this.apiRequest(url, method, this.formData);
+                        if (result.success) {
+                            if (method === 'POST') {
+                                this.sites.push(result.data);
+                            } else {
+                                const idx = this.sites.findIndex(s => s.id === this.modalData.id);
+                                if (idx !== -1) this.sites[idx] = result.data;
+                            }
+                            this.showToast(`Site ${method === 'POST' ? 'créé' : 'mis à jour'}`, 'success');
+                            this.closeModal('createEquipmentModal');
+                        }
+                    } catch (e) { console.error(e); }
+                    return;
+                }
+
+                // Équipements (switch, router, firewall)
+               const map = { switch: '/api/switches', router: '/api/routers', firewall: '/api/firewalls' };
+                let url = map[type];
                 if (!url) return;
-                // ... (code existant pour les équipements)
+
+                const method = this.modalData.id ? 'PUT' : 'POST';
+                const endpoint = this.modalData.id ? `${url}/${this.modalData.id}` : url;
+                const listKey = type + 's'; // 'switches', 'routers', 'firewalls'
+
+                try {
+                    const result = await this.apiRequest(endpoint, method, this.formData);
+                    if (result.success) {
+                        if (method === 'POST') {
+                            this[listKey].push(result.data);
+                        } else {
+                            const idx = this[listKey].findIndex(i => i.id === this.modalData.id);
+                            if (idx !== -1) this[listKey][idx] = result.data;
+                        }
+                        this.showToast(`${this.getTypeLabel(type)} ${method === 'POST' ? 'créé' : 'mis à jour'}`, 'success');
+                        this.closeModal('createEquipmentModal');
+                    }
+                } catch (e) { console.error(e); }
+                // ... (code existant pour les équipements) ...
             },
 
             viewItem(type, id) {
@@ -975,6 +1028,7 @@
                     this.modalData    = {};
                     this.formData     = {};
                 });
+                this.userToToggle = null;
             },
 
             // Toast
@@ -984,7 +1038,9 @@
             },
 
             // Connectivité (optionnel)
-            // ... (le code existant pour testConnectivity, etc.)
+            testConnectivity(type, id) {
+                this.showToast('Fonctionnalité de test non implémentée', 'warning');
+            },
 
             // Configuration ports / interfaces / policies
             configurePorts(switchId) {
@@ -1092,13 +1148,29 @@
                     || equipment.updated_at;
             },
 
-            // Modal détails
+            renderTestResults() {
+                const results = this.modalData?.results;
+                if (!results) {
+                    return '<p style="text-align:center;color:var(--text-light);padding:20px;">Aucun résultat disponible</p>';
+                }
+                if (Array.isArray(results)) {
+                    return results.map(r => `
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:15px;background:#f8fafc;border-radius:var(--border-radius);margin-bottom:10px;">
+                            <strong>${r.test}</strong>
+                            <span class="status-badge ${r.status === 'success' ? 'status-active' : 'status-danger'}">
+                                <i class="fas ${r.status === 'success' ? 'fa-check' : 'fa-times'}"></i> ${r.message || r.status}
+                            </span>
+                        </div>
+                    `).join('');
+                }
+                return `<pre>${JSON.stringify(results, null, 2)}</pre>`;
+            },
+
             viewEquipmentDetails(type, item) {
                 this.modalData = { type, item };
                 this.showModal('viewEquipmentModal');
             },
 
-           
             renderDetails() {
                 const { item } = this.modalData;
                 if (!item) return '';
@@ -1123,179 +1195,171 @@
                 return html;
             },
 
-            // ✅ FIX 2 — retourner '' (chaîne vide) quand item est absent,
-            //    jamais de texte visible. La div x-html="..." sera simplement vide
-            //    pendant le micro-tick entre masquage et reset, sans rien afficher.
-                    renderEquipmentDetails() {
-                        const { item, type } = this.modalData;
-                        if (!item) return '';
+            renderEquipmentDetails() {
+                const { item, type } = this.modalData;
+                if (!item) return '';
 
-                        const isActive = item.status === 'active' || item.status === true;
-                        let html = '<div style="display:grid;gap:24px;">';
+                const isActive = item.status === 'active' || item.status === true;
+                let html = '<div style="display:grid;gap:24px;">';
 
-                        // --- Informations générales (communes à tous) ---
-                        // Pour un site, on adapte les champs affichés
-                        let generalFields = [];
-                        if (type === 'site') {
-                            generalFields = [
-                                ['Nom', item.name],
-                                ['Code', item.code],
-                                ['Ville', item.city],
-                                ['Pays', item.country],
-                            ];
-                        } else {
-                            generalFields = [
-                                ['Nom', item.name],
-                                ['Site', item.site || 'N/A'],
-                                ['Marque', item.brand || 'N/A'],
-                                ['Modèle', item.model || 'N/A'],
-                                ['N° série', item.serial_number || 'N/A'],
-                            ];
-                        }
+                let generalFields = [];
+                if (type === 'site') {
+                    generalFields = [
+                        ['Nom', item.name],
+                        ['Code', item.code],
+                        ['Ville', item.city],
+                        ['Pays', item.country],
+                    ];
+                } else {
+                    generalFields = [
+                        ['Nom', item.name],
+                        ['Site', item.site || 'N/A'],
+                        ['Marque', item.brand || 'N/A'],
+                        ['Modèle', item.model || 'N/A'],
+                        ['N° série', item.serial_number || 'N/A'],
+                    ];
+                }
 
+                html += `
+                    <div style="background:#f8fafc;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--primary-color)">
+                        <h4 style="color:var(--primary-color);margin-bottom:16px"><i class="fas fa-info-circle"></i> Informations générales</h4>
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+                            ${generalFields.map(([l, v]) => `
+                                <div>
+                                    <div style="font-size:.85rem;color:var(--text-light)">${l}</div>
+                                    <div style="font-weight:600">${v || 'N/A'}</div>
+                                </div>
+                            `).join('')}
+                            <div>
+                                <div style="font-size:.85rem;color:var(--text-light)">Statut</div>
+                                <span class="status-badge ${isActive ? 'status-active' : 'status-danger'}">
+                                    <i class="fas ${isActive ? 'fa-check-circle' : 'fa-times-circle'}"></i>
+                                    ${isActive ? 'Actif' : 'Inactif'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>`;
+
+                if (type === 'site') {
+                    if (item.address || item.postal_code || item.city || item.country) {
                         html += `
-                            <div style="background:#f8fafc;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--primary-color)">
-                                <h4 style="color:var(--primary-color);margin-bottom:16px"><i class="fas fa-info-circle"></i> Informations générales</h4>
+                            <div style="background:#f0fdf4;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--success-color)">
+                                <h4 style="color:var(--success-color);margin-bottom:16px"><i class="fas fa-map-marker-alt"></i> Localisation</h4>
                                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
-                                    ${generalFields.map(([l, v]) => `
+                                    ${[
+                                        ['Adresse', item.address],
+                                        ['Code postal', item.postal_code],
+                                        ['Ville', item.city],
+                                        ['Pays', item.country]
+                                    ].filter(([_, v]) => v).map(([l, v]) => `
                                         <div>
                                             <div style="font-size:.85rem;color:var(--text-light)">${l}</div>
-                                            <div style="font-weight:600">${v || 'N/A'}</div>
+                                            <div style="font-weight:600">${v}</div>
                                         </div>
                                     `).join('')}
-                                    <div>
-                                        <div style="font-size:.85rem;color:var(--text-light)">Statut</div>
-                                        <span class="status-badge ${isActive ? 'status-active' : 'status-danger'}">
-                                            <i class="fas ${isActive ? 'fa-check-circle' : 'fa-times-circle'}"></i>
-                                            ${isActive ? 'Actif' : 'Inactif'}
-                                        </span>
-                                    </div>
                                 </div>
                             </div>`;
-
-                        // --- Si c'est un site, afficher les détails spécifiques ---
-                        if (type === 'site') {
-                            // Localisation
-                            if (item.address || item.postal_code || item.city || item.country) {
-                                html += `
-                                    <div style="background:#f0fdf4;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--success-color)">
-                                        <h4 style="color:var(--success-color);margin-bottom:16px"><i class="fas fa-map-marker-alt"></i> Localisation</h4>
-                                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
-                                            ${[
-                                                ['Adresse', item.address],
-                                                ['Code postal', item.postal_code],
-                                                ['Ville', item.city],
-                                                ['Pays', item.country]
-                                            ].filter(([_, v]) => v).map(([l, v]) => `
-                                                <div>
-                                                    <div style="font-size:.85rem;color:var(--text-light)">${l}</div>
-                                                    <div style="font-weight:600">${v}</div>
-                                                </div>
-                                            `).join('')}
-                                        </div>
-                                    </div>`;
-                            }
-
-                            // Contact
-                            if (item.contact_name || item.contact_email || item.contact_phone) {
-                                html += `
-                                    <div style="background:#fef3c7;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--warning-color)">
-                                        <h4 style="color:#92400e;margin-bottom:16px"><i class="fas fa-address-book"></i> Contact</h4>
-                                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
-                                            ${[
-                                                ['Nom', item.contact_name],
-                                                ['Email', item.contact_email],
-                                                ['Téléphone', item.contact_phone]
-                                            ].filter(([_, v]) => v).map(([l, v]) => `
-                                                <div>
-                                                    <div style="font-size:.85rem;color:#92400e">${l}</div>
-                                                    <div style="font-weight:600">${v}</div>
-                                                </div>
-                                            `).join('')}
-                                        </div>
-                                    </div>`;
-                            }
-
-                            // Équipements associés (optionnel)
-                            if (item.firewalls_count || item.routers_count || item.switches_count) {
-                                html += `
-                                    <div style="background:#e0f2fe;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--info-color)">
-                                        <h4 style="color:#0369a1;margin-bottom:16px"><i class="fas fa-network-wired"></i> Équipements</h4>
-                                        <div style="display:flex;gap:20px;flex-wrap:wrap;">
-                                            <div><span class="status-badge status-danger"><i class="fas fa-fire"></i> Firewalls : ${item.firewalls_count || 0}</span></div>
-                                            <div><span class="status-badge status-info"><i class="fas fa-route"></i> Routeurs : ${item.routers_count || 0}</span></div>
-                                            <div><span class="status-badge status-active"><i class="fas fa-exchange-alt"></i> Switchs : ${item.switches_count || 0}</span></div>
-                                        </div>
-                                    </div>`;
-                            }
-                        } else {
-                            html += `
-                                <div style="background:linear-gradient(135deg,#fef3c7,#fde68a);padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--warning-color)">
-                                    <h4 style="color:#92400e;margin-bottom:16px"><i class="fas fa-key"></i> Credentials d'accès</h4>
-                                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px">
+                    }
+                    if (item.contact_name || item.contact_email || item.contact_phone) {
+                        html += `
+                            <div style="background:#fef3c7;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--warning-color)">
+                                <h4 style="color:#92400e;margin-bottom:16px"><i class="fas fa-address-book"></i> Contact</h4>
+                                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+                                    ${[
+                                        ['Nom', item.contact_name],
+                                        ['Email', item.contact_email],
+                                        ['Téléphone', item.contact_phone]
+                                    ].filter(([_, v]) => v).map(([l, v]) => `
                                         <div>
-                                            <div style="font-size:.85rem;color:#92400e;margin-bottom:4px;font-weight:600"><i class="fas fa-user-shield"></i> Nom d'utilisateur</div>
-                                            <div style="background:white;padding:10px;border-radius:8px;font-family:monospace;font-weight:600">
-                                                ${item.username || '<span style="color:var(--text-light)">Non configuré</span>'}
-                                            </div>
+                                            <div style="font-size:.85rem;color:#92400e">${l}</div>
+                                            <div style="font-weight:600">${v}</div>
                                         </div>
-                                        <div>
-                                            <div style="font-size:.85rem;color:#92400e;margin-bottom:4px;font-weight:600"><i class="fas fa-lock"></i> Mot de passe</div>
-                                            <div style="background:white;padding:10px;border-radius:8px;font-family:monospace;font-weight:600">
-                                                ${'•'.repeat(12)} <span style="font-size:.75rem;color:var(--text-light)">(crypté)</span>
-                                            </div>
-                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>`;
+                    }
+                    if (item.firewalls_count || item.routers_count || item.switches_count) {
+                        html += `
+                            <div style="background:#e0f2fe;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--info-color)">
+                                <h4 style="color:#0369a1;margin-bottom:16px"><i class="fas fa-network-wired"></i> Équipements</h4>
+                                <div style="display:flex;gap:20px;flex-wrap:wrap;">
+                                    <div><span class="status-badge status-danger"><i class="fas fa-fire"></i> Firewalls : ${item.firewalls_count || 0}</span></div>
+                                    <div><span class="status-badge status-info"><i class="fas fa-route"></i> Routeurs : ${item.routers_count || 0}</span></div>
+                                    <div><span class="status-badge status-active"><i class="fas fa-exchange-alt"></i> Switchs : ${item.switches_count || 0}</span></div>
+                                </div>
+                            </div>`;
+                    }
+                } else {
+                    html += `
+                        <div style="background:linear-gradient(135deg,#fef3c7,#fde68a);padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--warning-color)">
+                            <h4 style="color:#92400e;margin-bottom:16px"><i class="fas fa-key"></i> Credentials d'accès</h4>
+                            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px">
+                                <div>
+                                    <div style="font-size:.85rem;color:#92400e;margin-bottom:4px;font-weight:600"><i class="fas fa-user-shield"></i> Nom d'utilisateur</div>
+                                    <div style="background:white;padding:10px;border-radius:8px;font-family:monospace;font-weight:600">
+                                        ${item.username || '<span style="color:var(--text-light)">Non configuré</span>'}
                                     </div>
-                                </div>`;
+                                </div>
+                                <div x-data="{ showPass: false }">
+                                    <div style="font-size:.85rem;color:#92400e;margin-bottom:4px;font-weight:600"><i class="fas fa-lock"></i> Mot de passe</div>
+                                    <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px; background:white; padding:8px 12px; border-radius:8px; font-family:monospace; font-weight:600;">
+                                        <span x-show="!showPass" style="flex:1 1 auto; word-break:break-word;">${'•'.repeat(12)}</span>
+                                        <span x-show="showPass" style="flex:1 1 auto; word-break:break-word; color:var(--text-light);">${item.password}</span>
+                                        <button @click="showPass = !showPass" class="btn btn-outline btn-sm" style="padding:2px 8px; flex-shrink:0;">
+                                            <i class="fas" :class="showPass ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>`;
 
-                            // Derniers accès
-                            if (item.access_logs?.length) {
-                                html += `
-                                    <div style="background:#e0f2fe;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--info-color)">
-                                        <h4 style="color:#0369a1;margin-bottom:16px"><i class="fas fa-history"></i> Derniers accès</h4>
-                                        <div style="display:grid;gap:10px">
-                                        ${item.access_logs.slice(0,5).map(log => `
-                                            <div style="background:white;padding:12px;border-radius:8px;display:flex;justify-content:space-between;align-items:center">
-                                                <div style="display:flex;align-items:center;gap:12px">
-                                                    <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--primary-color),var(--accent-color));display:flex;align-items:center;justify-content:center;color:white;font-weight:700">
-                                                        ${(log.user?.name || 'U').charAt(0).toUpperCase()}
-                                                    </div>
-                                                    <div>
-                                                        <div style="font-weight:600">${log.user?.name || log.ip_address || 'Inconnu'}</div>
-                                                        <div style="font-size:.8rem;color:var(--text-light)">
-                                                            <i class="fas fa-desktop"></i> ${log.ip_address || ''}
-                                                            ${log.action ? `• ${log.action}` : ''}
-                                                        </div>
-                                                    </div>
+                    if (item.access_logs?.length) {
+                        html += `
+                            <div style="background:#e0f2fe;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--info-color)">
+                                <h4 style="color:#0369a1;margin-bottom:16px"><i class="fas fa-history"></i> Derniers accès</h4>
+                                <div style="display:grid;gap:10px">
+                                ${item.access_logs.slice(0,5).map(log => `
+                                    <div style="background:white;padding:12px;border-radius:8px;display:flex;justify-content:space-between;align-items:center">
+                                        <div style="display:flex;align-items:center;gap:12px">
+                                            <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--primary-color),var(--accent-color));display:flex;align-items:center;justify-content:center;color:white;font-weight:700">
+                                                ${(log.user?.name || 'U').charAt(0).toUpperCase()}
+                                            </div>
+                                            <div>
+                                                <div style="font-weight:600">${log.user?.name || log.ip_address || 'Inconnu'}</div>
+                                                <div style="font-size:.8rem;color:var(--text-light)">
+                                                    <i class="fas fa-desktop"></i> ${log.ip_address || ''}
+                                                    ${log.action ? `• ${log.action}` : ''}
                                                 </div>
-                                                <div style="font-size:.8rem;color:var(--text-light)">${this.formatDate(log.created_at)}</div>
-                                            </div>`).join('')}
+                                            </div>
                                         </div>
-                                        ${item.access_logs.length > 5 ? `<div style="text-align:center;margin-top:12px;color:var(--text-light);font-size:.85rem">... et ${item.access_logs.length - 5} accès supplémentaires</div>` : ''}
-                                    </div>`;
-                            } else {
-                                html += `
-                                    <div style="background:#f8fafc;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--text-light)">
-                                        <h4 style="color:var(--text-light);margin-bottom:12px"><i class="fas fa-history"></i> Derniers accès</h4>
-                                        <p style="color:var(--text-light);text-align:center;padding:20px"><i class="fas fa-info-circle"></i> Aucun accès enregistré</p>
-                                    </div>`;
-                            }
-                        }
+                                        <div style="font-size:.8rem;color:var(--text-light)">${this.formatDate(log.created_at)}</div>
+                                    </div>`).join('')}
+                                </div>
+                                ${item.access_logs.length > 5 ? `<div style="text-align:center;margin-top:12px;color:var(--text-light);font-size:.85rem">... et ${item.access_logs.length - 5} accès supplémentaires</div>` : ''}
+                            </div>`;
+                    } else {
+                        html += `
+                            <div style="background:#f8fafc;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--text-light)">
+                                <h4 style="color:var(--text-light);margin-bottom:12px"><i class="fas fa-history"></i> Derniers accès</h4>
+                                <p style="color:var(--text-light);text-align:center;padding:20px"><i class="fas fa-info-circle"></i> Aucun accès enregistré</p>
+                            </div>`;
+                    }
+                }
 
-                        html += '</div>';
-                        return html;
-                    },
-    // Ces ajouts doivent être fusionnés dans la définition de dashboardApp() existante.
-    // Voici les nouvelles propriétés et méthodes à intégrer :
+                html += '</div>';
+                return html;
+            },
+
             modalSiteEquipmentList: [],
             modalSiteEquipmentType: null,
             modalSiteEquipmentTitle: '',
+            userToToggle: null,
 
             showSiteEquipment(siteId, type) {
                 const site = this.sites.find(s => s.id === siteId);
                 if (!site) return;
                 let list = [];
-                const typePlural = type + 's'; // 'firewalls', 'routers', 'switches'
+                const typePlural = type + 's';
                 if (this[typePlural]) {
                     list = this[typePlural].filter(eq => eq.site_id === siteId);
                 }
@@ -1306,7 +1370,6 @@
                 this.currentModal = 'siteEquipment';
                 this.showModal('viewSiteEquipmentModal');
             },
-   
 
             editUser(user) {
                 this.modalData = { type: 'user', id: user.id };
@@ -1316,8 +1379,16 @@
                 this.showModal('createEquipmentModal');
             },
 
-            async toggleUserStatus(user) {
-                if (!confirm(`Changer le statut de ${user.name} ?`)) return;
+            toggleUserStatus(user) {
+                this.userToToggle = user;
+                this.currentModal = 'toggleUserStatus';
+                this.modalTitle = 'Confirmation';
+                this.showModal('toggleUserStatusModal');
+            },
+
+            async confirmToggleUserStatus() {
+                if (!this.userToToggle) return;
+                const user = this.userToToggle;
                 const result = await this.apiRequest(`/api/users/${user.id}/toggle-status`, 'PATCH');
                 if (result.success) {
                     const idx = this.users.findIndex(u => u.id === user.id);
@@ -1327,9 +1398,10 @@
                     }
                     this.showToast(result.message, 'success');
                 }
+                this.closeModal('toggleUserStatusModal');
+                this.userToToggle = null;
             },
 
-            // Pour le switch
             uploadPortConfig() {
                 const fileInput = document.getElementById('portConfigFile');
                 if (!fileInput.files.length) {
@@ -1340,7 +1412,6 @@
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     try {
-                        // Optionnel : valider que c'est du JSON valide
                         JSON.parse(e.target.result);
                         this.formData.portConfiguration = e.target.result;
                         this.showToast('Fichier chargé avec succès', 'success');
@@ -1351,7 +1422,6 @@
                 reader.readAsText(file);
             },
 
-            // Pour le firewall
             uploadSecurityPolicies() {
                 const fileInput = document.getElementById('securityPoliciesFile');
                 if (!fileInput.files.length) {
@@ -1372,6 +1442,20 @@
                 reader.readAsText(file);
             },
 
+            editItem(type, id) {
+                const item = this[type].find(i => i.id === id);
+                if (!item) return;
+                this.modalData = { type: type.slice(0, -1), id };
+                this.formData = { ...item };
+                this.currentModal = 'create';
+                this.modalTitle = `Modifier ${item.name}`;
+                this.showModal('createEquipmentModal');
+            },
+
+            editEquipment(type, id) {
+                this.editItem(type + 's', id);
+            },
+
             async deleteUser(id) {
                 if (!confirm('Supprimer définitivement cet utilisateur ?')) return;
                 const result = await this.apiRequest(`/api/users/${id}`, 'DELETE');
@@ -1385,4 +1469,3 @@
     </script>
 </body>
 </html>
-

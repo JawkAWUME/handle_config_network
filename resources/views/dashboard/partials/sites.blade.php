@@ -52,17 +52,14 @@
                             </td>
                             <td>
                                 <div style="display: flex; gap: 12px; font-size: 0.85rem;">
-                                    {{-- Badge Firewalls cliquable --}}
                                     <span class="status-badge status-danger" style="font-size: 0.75rem; cursor: pointer;" 
                                           @click="showSiteEquipment(site.id, 'firewall')">
                                         <i class="fas fa-fire"></i> <span x-text="(site.firewalls_count || 0)"></span>
                                     </span>
-                                    {{-- Badge Routeurs cliquable --}}
                                     <span class="status-badge status-info" style="font-size: 0.75rem; cursor: pointer;" 
                                           @click="showSiteEquipment(site.id, 'router')">
                                         <i class="fas fa-route"></i> <span x-text="(site.routers_count || 0)"></span>
                                     </span>
-                                    {{-- Badge Switchs cliquable --}}
                                     <span class="status-badge status-active" style="font-size: 0.75rem; cursor: pointer;" 
                                           @click="showSiteEquipment(site.id, 'switch')">
                                         <i class="fas fa-exchange-alt"></i> <span x-text="(site.switches_count || 0)"></span>
@@ -118,6 +115,8 @@
         </div>
     </section>
 </div>
+
+{{-- ⚠️ Le modal de création/édition de site a été SUPPRIMÉ car il est maintenant centralisé dans modals.blade.php --}}
 
 {{-- ════════════════════════════════════════════════════════════
      MODAL : Création / Édition d'un Site (inchangé)

@@ -5,6 +5,7 @@ use App\Http\Controllers\FirewallController;
 use App\Http\Controllers\RouterController;
 use App\Http\Controllers\SwitchController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\SiteController;
 use Illuminate\Support\Facades\Route;
 
 

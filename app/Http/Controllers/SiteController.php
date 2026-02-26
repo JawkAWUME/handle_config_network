@@ -86,8 +86,17 @@ class SiteController extends Controller
 
         $validated = $request->validate([
             'name'    => 'required|string|max:255',
-            'code'    => 'required|string|max:50|unique:sites,code',
             'address' => 'nullable|string|max:500',
+            'city'          => 'nullable|string|max:255',
+            'country'       => 'nullable|string|max:255',
+            'postal_code'   => 'nullable|string|max:20',
+            'latitude'      => 'nullable|numeric',
+            'longitude'     => 'nullable|numeric',
+            'contact_name'  => 'nullable|string|max:255',
+            'contact_email' => 'nullable|email|max:255',
+            'contact_phone' => 'nullable|string|max:50',
+            'description'   => 'nullable|string',
+            'notes'         => 'nullable|string',
         ]);
 
         try {
