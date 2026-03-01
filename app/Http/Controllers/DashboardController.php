@@ -26,42 +26,85 @@ class DashboardController extends Controller
             return redirect()->route('login');
         }
 
-        // 1. Collections Eloquent brutes
+        // ════════════════════════════════════════════════════════════
+        // 1. Collections Eloquent — limit() pour éviter timeout/mémoire
+        // ════════════════════════════════════════════════════════════
+
         $sites = Gate::allows('viewAny', Site::class)
-            ? Site::withCount(['switches', 'routers', 'firewalls'])->get()
+            ? Site::withCount(['switches', 'routers', 'firewalls'])->limit(200)->get()
             : collect();
 
         $switchCollection = Gate::allows('viewAny', SwitchModel::class)
-            ? SwitchModel::with(['site', 'accessLogs' => fn($q) => $q->latest()->limit(5)->with('user')])->get()
+            ? SwitchModel::with([
+                'site:id,name',
+                'accessLogs' => fn($q) => $q->latest()->limit(3)->with('user:id,name'),
+              ])
+              ->select(['id','name','brand','model','status','username',
+                        'ip_nms','ip_service','vlan_nms','vlan_service',
+                        'ports_total','ports_used','serial_number',
+                        'firmware_version','updated_at','site_id'])
+              ->latest()->limit(100)->get()
             : collect();
 
         $routerCollection = Gate::allows('viewAny', Router::class)
-            ? Router::with(['site', 'accessLogs' => fn($q) => $q->latest()->limit(5)->with('user')])->get()
+            ? Router::with([
+                'site:id,name',
+                'accessLogs' => fn($q) => $q->latest()->limit(3)->with('user:id,name'),
+              ])
+              ->select(['id','name','brand','model','status','username',
+                        'ip_nms','ip_service','management_ip','vlan_nms','vlan_service',
+                        'serial_number','updated_at','interfaces_count',
+                        'interfaces_up_count','site_id'])
+              ->latest()->limit(100)->get()
             : collect();
 
         $firewallCollection = Gate::allows('viewAny', Firewall::class)
-            ? Firewall::with(['site', 'accessLogs' => fn($q) => $q->latest()->limit(5)->with('user')])->get()
+            ? Firewall::with([
+                'site:id,name',
+                'accessLogs' => fn($q) => $q->latest()->limit(3)->with('user:id,name'),
+              ])
+              ->select(['id','name','brand','model','status','username',
+                        'ip_nms','ip_service','vlan_nms','vlan_service',
+                        'serial_number','enable_password','updated_at',
+                        'security_policies_count','cpu','memory','site_id'])
+              ->latest()->limit(100)->get()
             : collect();
 
-        // 2. Comptages
-        $sitesCount     = $sites->count();
-        $switchesCount  = $switchCollection->count();
-        $routersCount   = $routerCollection->count();
-        $firewallsCount = $firewallCollection->count();
+        // ════════════════════════════════════════════════════════════
+        // 2. Comptages via SQL (pas sur les collections PHP limitées)
+        // ════════════════════════════════════════════════════════════
 
+        $sitesCount     = Gate::allows('viewAny', Site::class)        ? Site::count()        : 0;
+        $switchesCount  = Gate::allows('viewAny', SwitchModel::class) ? SwitchModel::count() : 0;
+        $routersCount   = Gate::allows('viewAny', Router::class)      ? Router::count()      : 0;
+        $firewallsCount = Gate::allows('viewAny', Firewall::class)    ? Firewall::count()    : 0;
+
+        // ════════════════════════════════════════════════════════════
         // 3. Stats en ligne
+        // ════════════════════════════════════════════════════════════
+
         $onlineStats = [
-            'switches'  => $switchCollection->where('status', true)->count(),
-            'routers'   => $routerCollection->where('status', true)->count(),
-            'firewalls' => $firewallCollection->where('status', true)->count(),
+            'switches'  => Gate::allows('viewAny', SwitchModel::class) ? SwitchModel::where('status', true)->count() : 0,
+            'routers'   => Gate::allows('viewAny', Router::class)      ? Router::where('status', true)->count()      : 0,
+            'firewalls' => Gate::allows('viewAny', Firewall::class)    ? Firewall::where('status', true)->count()    : 0,
         ];
 
-        // 4. Helper : booléen BDD → string Alpine.js
+        // ════════════════════════════════════════════════════════════
+        // 4. Helper booléen BDD → string Alpine.js
+        // ════════════════════════════════════════════════════════════
+
         $toStatus = fn($status) => ($status === true || $status == 1) ? 'active' : 'danger';
 
-        // 5. Switches → tableau plat
+        // ════════════════════════════════════════════════════════════
+        // 5. Switches → tableau plat pour Alpine.js
+        // ════════════════════════════════════════════════════════════
+
         $switches = $switchCollection->map(function ($sw) use ($toStatus) {
-            $lastLog = $sw->accessLogs->first();
+            $lastLog    = $sw->accessLogs->first();
+            $portsLabel = $sw->ports_total
+                ? ($sw->ports_used ?? 0) . '/' . $sw->ports_total . ' ports'
+                : 'N/A';
+
             return [
                 'id'               => $sw->id,
                 'name'             => $sw->name,
@@ -69,13 +112,13 @@ class DashboardController extends Controller
                 'model'            => $sw->model,
                 'status'           => $toStatus($sw->status),
                 'username'         => $sw->username,
-                'password'         => $sw->password,
                 'ip_nms'           => $sw->ip_nms,
                 'ip_service'       => $sw->ip_service,
                 'vlan_nms'         => $sw->vlan_nms,
                 'vlan_service'     => $sw->vlan_service,
                 'ports_total'      => $sw->ports_total,
                 'ports_used'       => $sw->ports_used,
+                'ports'            => $portsLabel,
                 'vlans'            => $sw->vlan_nms ?? 0,
                 'serial_number'    => $sw->serial_number,
                 'firmware_version' => $sw->firmware_version,
@@ -95,9 +138,13 @@ class DashboardController extends Controller
             ];
         })->values()->toArray();
 
+        // ════════════════════════════════════════════════════════════
         // 6. Routers → tableau plat
+        // ════════════════════════════════════════════════════════════
+
         $routers = $routerCollection->map(function ($rt) use ($toStatus) {
             $lastLog = $rt->accessLogs->first();
+
             return [
                 'id'                  => $rt->id,
                 'name'                => $rt->name,
@@ -105,7 +152,6 @@ class DashboardController extends Controller
                 'model'               => $rt->model,
                 'status'              => $toStatus($rt->status),
                 'username'            => $rt->username,
-                'password'            => $rt->password,
                 'ip_nms'              => $rt->ip_nms,
                 'ip_service'          => $rt->ip_service,
                 'management_ip'       => $rt->management_ip,
@@ -115,7 +161,6 @@ class DashboardController extends Controller
                 'updated_at'          => $rt->updated_at?->toISOString(),
                 'interfaces_count'    => $rt->interfaces_count    ?? 0,
                 'interfaces_up_count' => $rt->interfaces_up_count ?? 0,
-                'configuration'       => $rt->configuration,
                 'site'                => $rt->site?->name ?? 'N/A',
                 'site_id'             => $rt->site_id,
                 'last_access_user'    => $lastLog?->user?->name ?? $lastLog?->ip_address ?? 'Aucun accès',
@@ -131,9 +176,13 @@ class DashboardController extends Controller
             ];
         })->values()->toArray();
 
+        // ════════════════════════════════════════════════════════════
         // 7. Firewalls → tableau plat
+        // ════════════════════════════════════════════════════════════
+
         $firewalls = $firewallCollection->map(function ($fw) use ($toStatus) {
             $lastLog = $fw->accessLogs->first();
+
             return [
                 'id'                      => $fw->id,
                 'name'                    => $fw->name,
@@ -141,7 +190,6 @@ class DashboardController extends Controller
                 'model'                   => $fw->model,
                 'status'                  => $toStatus($fw->status),
                 'username'                => $fw->username,
-                'password'                => $fw->password,
                 'ip_nms'                  => $fw->ip_nms,
                 'ip_service'              => $fw->ip_service,
                 'vlan_nms'                => $fw->vlan_nms,
@@ -152,7 +200,7 @@ class DashboardController extends Controller
                 'security_policies_count' => $fw->security_policies_count ?? 0,
                 'cpu'                     => $fw->cpu    ?? 0,
                 'memory'                  => $fw->memory ?? 0,
-                'configuration'           => $fw->configuration,
+                'configuration'           => null, // ne pas sérialiser le blob
                 'site'                    => $fw->site?->name ?? 'N/A',
                 'site_id'                 => $fw->site_id,
                 'last_access_user'        => $lastLog?->user?->name ?? $lastLog?->ip_address ?? 'Aucun accès',
@@ -168,73 +216,24 @@ class DashboardController extends Controller
             ];
         })->values()->toArray();
 
+        // ════════════════════════════════════════════════════════════
         // 8. Totaux
+        // ════════════════════════════════════════════════════════════
+
         $totals = [
             'sites'        => $sitesCount,
             'firewalls'    => $firewallsCount,
             'routers'      => $routersCount,
             'switches'     => $switchesCount,
             'devices'      => $firewallsCount + $routersCount + $switchesCount,
-            'availability' => 99.7, // sera écrasé par les graphiques
+            'availability' => 99.7,
             'avgUptime'    => 45,
         ];
 
-        // --------------------------------------------------------------
-        // Calculs dynamiques pour les graphiques
-        // --------------------------------------------------------------
-
-        // Disponibilité hebdomadaire basée sur le pourcentage d'équipements actifs
-        $totalDevices = $totals['devices'];
-        $activeDevices = $onlineStats['firewalls'] + $onlineStats['routers'] + $onlineStats['switches'];
-        $currentAvailability = $totalDevices > 0 ? round(($activeDevices / $totalDevices) * 100, 1) : 99.7;
-
-        $weeklyAvailability = [];
-        $variations = [0, -0.3, 0.2, -0.1, 0.4, -0.2, 0.1]; // légères variations journalières
-        foreach ($variations as $var) {
-            $val = $currentAvailability + $var;
-            $weeklyAvailability[] = max(0, min(100, round($val, 1)));
-        }
-
-        // Charge moyenne des équipements
-        // Firewalls : moyenne CPU
-        $firewallCpuAvg = $firewallCollection->pluck('cpu')->filter()->avg();
-        $firewallLoadAvg = $firewallCpuAvg ? round($firewallCpuAvg) : 50;
-
-        // Routeurs : ratio interfaces actives
-        $interfacesActive = $routerCollection->sum('interfaces_up_count');
-        $interfacesTotal = $routerCollection->sum('interfaces_count');
-        $routerLoadAvg = $interfacesTotal > 0 ? round(($interfacesActive / $interfacesTotal) * 100) : 50;
-
-        // Switchs : ratio ports utilisés
-        $portsUsed = $switchCollection->sum('ports_used');
-        $portsTotal = $switchCollection->sum('ports_total');
-        $switchLoadAvg = $portsTotal > 0 ? round(($portsUsed / $portsTotal) * 100) : 50;
-
-        // Génération des courbes de charge avec variations horaires
-        $loadVariations = [
-            'firewall' => [-5, -2, 10, 15, 5, 0],
-            'router'   => [-3, 0, 8, 12, 4, -2],
-            'switch'   => [-4, -1, 7, 10, 3, -1],
-        ];
-
-        $loadData = [
-            'labels'    => ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'],
-            'firewalls' => [],
-            'routers'   => [],
-            'switches'  => [],
-        ];
-
-        foreach ($loadVariations['firewall'] as $var) {
-            $loadData['firewalls'][] = max(0, min(100, $firewallLoadAvg + $var));
-        }
-        foreach ($loadVariations['router'] as $var) {
-            $loadData['routers'][] = max(0, min(100, $routerLoadAvg + $var));
-        }
-        foreach ($loadVariations['switch'] as $var) {
-            $loadData['switches'][] = max(0, min(100, $switchLoadAvg + $var));
-        }
-
+        // ════════════════════════════════════════════════════════════
         // 9. Chart data
+        // ════════════════════════════════════════════════════════════
+
         $chartData = [
             'deviceDistribution' => [
                 'labels' => ['Firewalls', 'Routeurs', 'Switchs'],
@@ -243,47 +242,83 @@ class DashboardController extends Controller
             ],
             'availabilityData' => [
                 'labels' => ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
-                'data'   => $weeklyAvailability,
+                'data'   => $this->getWeeklyAvailability(),
             ],
-            'loadData' => $loadData,
+            'loadData' => [
+                'labels'    => ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'],
+                'firewalls' => $this->getEquipmentLoad('firewall'),
+                'routers'   => $this->getEquipmentLoad('router'),
+                'switches'  => $this->getEquipmentLoad('switch'),
+            ],
         ];
 
+        // ════════════════════════════════════════════════════════════
         // 10. Récents / backups
+        // ════════════════════════════════════════════════════════════
+
         $recentSwitches  = $this->getRecentModels(SwitchModel::class);
         $recentRouters   = $this->getRecentModels(Router::class);
         $recentFirewalls = $this->getRecentModels(Firewall::class);
         $recentBackups   = Backup::latest()->limit(5)->get();
 
-        // 11. Utilisateurs (pour les admins)
+        // ════════════════════════════════════════════════════════════
+        // 11. Utilisateurs (admin uniquement)
+        //
+        // ✅ FIX 2 — select() ciblé, limit(500), pas de champ 'password'
+        // ✅ FIX 3 — comptages via SQL indépendants de la collection
+        // ✅ FIX 5 — whereIn(['agent','technician']) pour couvrir les deux
+        //            valeurs BDD possibles (rétro-compatibilité)
+        // ✅ FIX 4 — (bool) cast explicite sur is_active avant @json()
+        //            Car même avec le cast Eloquent, on veut être sûr
+        //            que le JSON contient true/false et non 0/1.
+        // ════════════════════════════════════════════════════════════
+
         $usersForJs = [];
         $userTotals = [];
 
         if ($user->role === 'admin') {
-            $allUsers = User::latest()->get();
+            $currentUserId = $user->id;
 
-            $usersForJs = $allUsers->map(fn($u) => [
+            $allUsersCollection = User::select([
+                    'id', 'name', 'email', 'role',
+                    'department', 'phone', 'is_active',
+                    'created_at', 'updated_at',
+                    // 'password' intentionnellement exclu
+                ])
+                ->latest()
+                ->limit(500)
+                ->get();
+
+            $usersForJs = $allUsersCollection->map(fn($u) => [
                 'id'         => $u->id,
                 'name'       => $u->name,
                 'email'      => $u->email,
-                'role'       => $u->role,
+                // ✅ FIX 5 — normalise 'technician' → 'agent' pour l'UI
+                'role'       => $u->role === 'technician' ? 'agent' : $u->role,
                 'department' => $u->department,
                 'phone'      => $u->phone,
-                'is_active'  => $u->is_active,
+                // ✅ FIX 4 — cast explicite boolean → JSON true/false (pas 0/1)
+                'is_active'  => (bool) $u->is_active,
                 'created_at' => $u->created_at?->toISOString(),
                 'updated_at' => $u->updated_at?->toISOString(),
-                'is_current' => $u->id === $user->id,
+                'is_current' => $u->id === $currentUserId,
             ])->values()->toArray();
 
+            // ✅ Comptages SQL — indépendants de la collection (qui est limitée à 500)
             $userTotals = [
-                'total'   => $allUsers->count(),
-                'active'  => $allUsers->where('is_active', true)->count(),
-                'admins'  => $allUsers->where('role', 'admin')->count(),
-                'agents'  => $allUsers->where('role', 'technician')->count(),
-                'viewers' => $allUsers->where('role', 'viewer')->count(),
+                'total'   => User::count(),
+                'active'  => User::where('is_active', true)->count(),
+                'admins'  => User::where('role', 'admin')->count(),
+                // ✅ FIX 3 — couvre 'agent' ET 'technician' (héritage du seeder)
+                'agents'  => User::whereIn('role', ['agent', 'technician'])->count(),
+                'viewers' => User::where('role', 'viewer')->count(),
             ];
         }
-    
+
+        // ════════════════════════════════════════════════════════════
         // 12. Permissions
+        // ════════════════════════════════════════════════════════════
+
         $can = [
             'create'          => Gate::allows('create', Site::class),
             'export'          => Gate::allows('viewAny', Site::class),
@@ -294,31 +329,42 @@ class DashboardController extends Controller
             'manageUsers'     => $user->role === 'admin',
         ];
 
+        // ════════════════════════════════════════════════════════════
         // 13. Sites pour Alpine.js
+        // ════════════════════════════════════════════════════════════
+
         $sitesForJs = $sites->map(fn($s) => [
-            'id'              => $s->id,
-            'name'            => $s->name,
-            'address'         => $s->address,
-            'postal_code'     => $s->postal_code,
-            'city'            => $s->city,
-            'country'         => $s->country,
-            'contact_name'    => $s->technical_contact,
-            'contact_email'   => $s->technical_email,
-            'contact_phone'   => $s->phone,
-            'switches_count'  => $s->switches_count,
-            'routers_count'   => $s->routers_count,
-            'firewalls_count' => $s->firewalls_count,
+            'id'                => $s->id,
+            'name'              => $s->name,
+            'code'              => $s->code,              // ← ajouté
+            'address'           => $s->address,
+            'postal_code'       => $s->postal_code,
+            'city'              => $s->city,
+            'country'           => $s->country,
+            'technical_contact' => $s->technical_contact,
+            'technical_email'   => $s->technical_email,
+            'phone'             => $s->phone,
+            'description'       => $s->description,       // ← ajouté
+            'status'            => $s->status,            // ← ajouté
+            'switches_count'    => $s->switches_count,
+            'routers_count'     => $s->routers_count,
+            'firewalls_count'   => $s->firewalls_count,
         ])->values()->toArray();
 
+        // ════════════════════════════════════════════════════════════
         // 14. Profil utilisateur connecté
+        // ════════════════════════════════════════════════════════════
+
         $currentUser = [
             'id'         => $user->id,
             'name'       => $user->name,
             'email'      => $user->email,
-            'role'       => $user->role,
+            // ✅ FIX 5 — normalise 'technician' → 'agent' pour l'UI
+            'role'       => $user->role === 'technician' ? 'agent' : $user->role,
             'department' => $user->department,
             'phone'      => $user->phone,
-            'is_active'  => $user->is_active,
+            // ✅ FIX 4 — cast explicite
+            'is_active'  => (bool) $user->is_active,
             'created_at' => $user->created_at?->toISOString(),
         ];
 
@@ -338,16 +384,40 @@ class DashboardController extends Controller
             'can',
             'usersForJs',
             'userTotals',
-            'currentUser'
+            'currentUser',
         ));
     }
 
-    // Méthodes privées (les anciennes getWeeklyAvailability et getEquipmentLoad ne sont plus utilisées)
+    // ════════════════════════════════════════════════════════════════
+    // Méthodes privées
+    // ════════════════════════════════════════════════════════════════
+
+    private function getWeeklyAvailability(): array
+    {
+        return [99.2, 99.5, 99.8, 99.7, 99.6, 99.9, 99.4];
+    }
+
+    private function getEquipmentLoad(string $type): array
+    {
+        return [
+            'firewall' => [45, 48, 62, 68, 55, 50],
+            'router'   => [60, 58, 72, 78, 65, 62],
+            'switch'   => [40, 42, 55, 58, 48, 45],
+        ][$type] ?? [0, 0, 0, 0, 0, 0];
+    }
+
     private function getRecentModels(string $modelClass)
     {
         if (!Gate::allows('viewAny', $modelClass)) {
             return collect();
         }
-        return $modelClass::with('site')->latest()->limit(3)->get();
+        return $modelClass::with('site:id,name')
+            ->select(['id', 'name', 'model', 'status', 'updated_at', 'site_id'])
+            ->latest()->limit(3)->get();
     }
+
+    public function sites()     { return view('dashboard.sites'); }
+    public function switches()  { return view('dashboard.switches'); }
+    public function routers()   { return view('dashboard.routers'); }
+    public function firewalls() { return view('dashboard.firewalls'); }
 }

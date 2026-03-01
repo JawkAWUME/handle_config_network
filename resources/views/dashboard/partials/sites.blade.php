@@ -488,4 +488,3 @@
     </div>
 </div>
 
-{{-- Ajout des propriétés et méthodes nécessaires dans l'objet Alpine --}}

@@ -79,24 +79,30 @@ class SiteController extends Controller
 
     /**
      * Créer un site (JSON)
+     *
+     * Les champs envoyés par le modal utilisent les noms réels de la BDD :
+     *   technical_contact, technical_email, phone, code, status, description...
      */
     public function store(Request $request)
     {
         Gate::authorize('create', Site::class);
 
         $validated = $request->validate([
-            'name'    => 'required|string|max:255',
-            'address' => 'nullable|string|max:500',
-            'city'          => 'nullable|string|max:255',
-            'country'       => 'nullable|string|max:255',
-            'postal_code'   => 'nullable|string|max:20',
-            'latitude'      => 'nullable|numeric',
-            'longitude'     => 'nullable|numeric',
-            'contact_name'  => 'nullable|string|max:255',
-            'contact_email' => 'nullable|email|max:255',
-            'contact_phone' => 'nullable|string|max:50',
-            'description'   => 'nullable|string',
-            'notes'         => 'nullable|string',
+            'name'               => 'required|string|max:255',
+            'code'               => 'nullable|string|max:50|unique:sites,code',
+            'address'            => 'nullable|string|max:500',
+            'city'               => 'nullable|string|max:255',
+            'country'            => 'nullable|string|max:255',
+            'postal_code'        => 'nullable|string|max:20',
+            'latitude'           => 'nullable|numeric',
+            'longitude'          => 'nullable|numeric',
+            // Champs contact (noms BDD réels)
+            'contact_name'  => 'nullable|string|max:255',   // ← anciennement contact_name
+            'contact_email' => 'nullable|email|max:255',    // ← anciennement contact_email
+            'contact_phone'      => 'nullable|string|max:50',    // ← anciennement contact_phone
+            'description'        => 'nullable|string',
+            'status'             => 'nullable|string|max:50',
+            'notes'              => 'nullable|string',
         ]);
 
         try {
@@ -105,7 +111,7 @@ class SiteController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Site créé avec succès',
-                'data'    => $site,
+                'data'    => $this->formatSite($site),
             ], 201);
 
         } catch (\Exception $e) {
@@ -125,9 +131,20 @@ class SiteController extends Controller
         Gate::authorize('update', $site);
 
         $validated = $request->validate([
-            'name'    => 'sometimes|required|string|max:255',
-            'code'    => 'sometimes|required|string|max:50|unique:sites,code,' . $id,
-            'address' => 'nullable|string|max:500',
+            'name'               => 'sometimes|required|string|max:255',
+            'code'               => 'sometimes|nullable|string|max:50|unique:sites,code,' . $id,
+            'address'            => 'sometimes|nullable|string|max:500',
+            'city'               => 'sometimes|nullable|string|max:255',
+            'country'            => 'sometimes|nullable|string|max:255',
+            'postal_code'        => 'sometimes|nullable|string|max:20',
+            'latitude'           => 'sometimes|nullable|numeric',
+            'longitude'          => 'sometimes|nullable|numeric',
+            'technical_contact'  => 'sometimes|nullable|string|max:255',
+            'technical_email'    => 'sometimes|nullable|email|max:255',
+            'phone'              => 'sometimes|nullable|string|max:50',
+            'description'        => 'sometimes|nullable|string',
+            'status'             => 'sometimes|nullable|string|max:50',
+            'notes'              => 'sometimes|nullable|string',
         ]);
 
         try {
@@ -136,7 +153,7 @@ class SiteController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Site mis à jour avec succès',
-                'data'    => $site->fresh(),
+                'data'    => $this->formatSite($site->fresh()),
             ]);
 
         } catch (\Exception $e) {
@@ -190,5 +207,30 @@ class SiteController extends Controller
                 'message' => 'Erreur lors de l\'export : ' . $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Formater un site pour Alpine.js (même structure que sitesForJs dans DashboardController)
+     * Garantit que la réponse JSON après create/update est directement utilisable par le frontend.
+     */
+    private function formatSite(Site $site): array
+    {
+        return [
+            'id'                => $site->id,
+            'name'              => $site->name,
+            'code'              => $site->code,
+            'address'           => $site->address,
+            'postal_code'       => $site->postal_code,
+            'city'              => $site->city,
+            'country'           => $site->country,
+            'technical_contact' => $site->technical_contact,
+            'technical_email'   => $site->technical_email,
+            'phone'             => $site->phone,
+            'description'       => $site->description,
+            'status'            => $site->status,
+            'switches_count'    => $site->switches()->count(),
+            'routers_count'     => $site->routers()->count(),
+            'firewalls_count'   => $site->firewalls()->count(),
+        ];
     }
 }

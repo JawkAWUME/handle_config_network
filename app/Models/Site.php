@@ -1,5 +1,4 @@
 <?php
-
 // app/Models/Site.php
 namespace App\Models;
 
@@ -10,24 +9,25 @@ use Illuminate\Notifications\Notifiable;
 
 class Site extends Model
 {
-
     use HasFactory, Notifiable;
 
     protected $fillable = [
         'name',
+        'code',                  // ← ajouté (champ modal "Code")
         'address',
         'city',
         'country',
         'postal_code',
-        'phone',
-        'technical_contact',
-        'technical_email',
+        'phone',                 // ← correspond à contact_phone dans le modal
+        'technical_contact',     // ← correspond à contact_name dans le modal
+        'technical_email',       // ← correspond à contact_email dans le modal
         'description',
-        'status',
+        'status',                // ← ajouté
         'capacity',
         'notes',
+        'latitude',              // ← ajouté (utilisé dans SiteController::store)
+        'longitude',             // ← ajouté (utilisé dans SiteController::store)
     ];
-
 
     public function switches(): HasMany
     {
