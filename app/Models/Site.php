@@ -1,6 +1,5 @@
 <?php
 
-// app/Models/Site.php
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -10,11 +9,11 @@ use Illuminate\Notifications\Notifiable;
 
 class Site extends Model
 {
-
     use HasFactory, Notifiable;
 
     protected $fillable = [
         'name',
+        'code',
         'address',
         'city',
         'country',
@@ -26,8 +25,9 @@ class Site extends Model
         'status',
         'capacity',
         'notes',
+        'latitude',
+        'longitude',
     ];
-
 
     public function switches(): HasMany
     {

@@ -28,7 +28,7 @@ class DashboardController extends Controller
 
         // 1. Collections Eloquent brutes
         $sites = Gate::allows('viewAny', Site::class)
-            ? Site::withCount(['switches', 'routers', 'firewalls'])->get()
+            ? Site::with(['switches', 'routers', 'firewalls'])->withCount(['switches', 'routers', 'firewalls'])->get()
             : collect();
 
         $switchCollection = Gate::allows('viewAny', SwitchModel::class)
@@ -175,46 +175,37 @@ class DashboardController extends Controller
             'routers'      => $routersCount,
             'switches'     => $switchesCount,
             'devices'      => $firewallsCount + $routersCount + $switchesCount,
-            'availability' => 99.7, // sera écrasé par les graphiques
+            'availability' => 99.7,
             'avgUptime'    => 45,
         ];
 
-        // --------------------------------------------------------------
-        // Calculs dynamiques pour les graphiques
-        // --------------------------------------------------------------
-
         // Disponibilité hebdomadaire basée sur le pourcentage d'équipements actifs
-        $totalDevices = $totals['devices'];
+        $totalDevices  = $totals['devices'];
         $activeDevices = $onlineStats['firewalls'] + $onlineStats['routers'] + $onlineStats['switches'];
         $currentAvailability = $totalDevices > 0 ? round(($activeDevices / $totalDevices) * 100, 1) : 99.7;
 
         $weeklyAvailability = [];
-        $variations = [0, -0.3, 0.2, -0.1, 0.4, -0.2, 0.1]; // légères variations journalières
+        $variations = [0, -0.3, 0.2, -0.1, 0.4, -0.2, 0.1];
         foreach ($variations as $var) {
-            $val = $currentAvailability + $var;
-            $weeklyAvailability[] = max(0, min(100, round($val, 1)));
+            $weeklyAvailability[] = max(0, min(100, round($currentAvailability + $var, 1)));
         }
 
-        // Charge moyenne des équipements
-        // Firewalls : moyenne CPU
-        $firewallCpuAvg = $firewallCollection->pluck('cpu')->filter()->avg();
+        // Charge des équipements
+        $firewallCpuAvg  = $firewallCollection->pluck('cpu')->filter()->avg();
         $firewallLoadAvg = $firewallCpuAvg ? round($firewallCpuAvg) : 50;
 
-        // Routeurs : ratio interfaces actives
         $interfacesActive = $routerCollection->sum('interfaces_up_count');
-        $interfacesTotal = $routerCollection->sum('interfaces_count');
-        $routerLoadAvg = $interfacesTotal > 0 ? round(($interfacesActive / $interfacesTotal) * 100) : 50;
+        $interfacesTotal  = $routerCollection->sum('interfaces_count');
+        $routerLoadAvg    = $interfacesTotal > 0 ? round(($interfacesActive / $interfacesTotal) * 100) : 50;
 
-        // Switchs : ratio ports utilisés
-        $portsUsed = $switchCollection->sum('ports_used');
-        $portsTotal = $switchCollection->sum('ports_total');
+        $portsUsed     = $switchCollection->sum('ports_used');
+        $portsTotal    = $switchCollection->sum('ports_total');
         $switchLoadAvg = $portsTotal > 0 ? round(($portsUsed / $portsTotal) * 100) : 50;
 
-        // Génération des courbes de charge avec variations horaires
         $loadVariations = [
             'firewall' => [-5, -2, 10, 15, 5, 0],
-            'router'   => [-3, 0, 8, 12, 4, -2],
-            'switch'   => [-4, -1, 7, 10, 3, -1],
+            'router'   => [-3,  0,  8, 12, 4, -2],
+            'switch'   => [-4, -1,  7, 10, 3, -1],
         ];
 
         $loadData = [
@@ -223,7 +214,6 @@ class DashboardController extends Controller
             'routers'   => [],
             'switches'  => [],
         ];
-
         foreach ($loadVariations['firewall'] as $var) {
             $loadData['firewalls'][] = max(0, min(100, $firewallLoadAvg + $var));
         }
@@ -254,7 +244,7 @@ class DashboardController extends Controller
         $recentFirewalls = $this->getRecentModels(Firewall::class);
         $recentBackups   = Backup::latest()->limit(5)->get();
 
-        // 11. Utilisateurs (pour les admins)
+        // 11. Utilisateurs (admins uniquement)
         $usersForJs = [];
         $userTotals = [];
 
@@ -282,7 +272,7 @@ class DashboardController extends Controller
                 'viewers' => $allUsers->where('role', 'viewer')->count(),
             ];
         }
-    
+
         // 12. Permissions
         $can = [
             'create'          => Gate::allows('create', Site::class),
@@ -296,18 +286,25 @@ class DashboardController extends Controller
 
         // 13. Sites pour Alpine.js
         $sitesForJs = $sites->map(fn($s) => [
-            'id'              => $s->id,
-            'name'            => $s->name,
-            'address'         => $s->address,
-            'postal_code'     => $s->postal_code,
-            'city'            => $s->city,
-            'country'         => $s->country,
-            'contact_name'    => $s->technical_contact,
-            'contact_email'   => $s->technical_email,
-            'contact_phone'   => $s->phone,
-            'switches_count'  => $s->switches_count,
-            'routers_count'   => $s->routers_count,
-            'firewalls_count' => $s->firewalls_count,
+            'id'                => $s->id,
+            'name'              => $s->name,
+            'code'              => $s->code,
+            'address'           => $s->address,
+            'postal_code'       => $s->postal_code,
+            'city'              => $s->city,
+            'country'           => $s->country,
+            'technical_contact' => $s->technical_contact,
+            'technical_email'   => $s->technical_email,
+            'phone'             => $s->phone,
+            'description'       => $s->description,
+            'notes'             => $s->notes,
+            'switches_count'    => $s->switches_count,
+            'routers_count'     => $s->routers_count,
+            'firewalls_count'   => $s->firewalls_count,
+            // Ajout des IDs pour la sélection
+            'switches_ids'      => $s->switches->pluck('id')->toArray(),
+            'routers_ids'       => $s->routers->pluck('id')->toArray(),
+            'firewalls_ids'     => $s->firewalls->pluck('id')->toArray(),
         ])->values()->toArray();
 
         // 14. Profil utilisateur connecté
@@ -342,7 +339,6 @@ class DashboardController extends Controller
         ));
     }
 
-    // Méthodes privées (les anciennes getWeeklyAvailability et getEquipmentLoad ne sont plus utilisées)
     private function getRecentModels(string $modelClass)
     {
         if (!Gate::allows('viewAny', $modelClass)) {
