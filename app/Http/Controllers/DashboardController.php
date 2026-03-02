@@ -31,7 +31,11 @@ class DashboardController extends Controller
         // ════════════════════════════════════════════════════════════
 
         $sites = Gate::allows('viewAny', Site::class)
+<<<<<<< HEAD
             ? Site::withCount(['switches', 'routers', 'firewalls'])->limit(200)->get()
+=======
+            ? Site::with(['switches', 'routers', 'firewalls'])->withCount(['switches', 'routers', 'firewalls'])->get()
+>>>>>>> 6c11a86efad3a9258b108f90a0d4577ed02aa423
             : collect();
 
         $switchCollection = Gate::allows('viewAny', SwitchModel::class)
@@ -230,7 +234,55 @@ class DashboardController extends Controller
             'avgUptime'    => 45,
         ];
 
+<<<<<<< HEAD
         // ════════════════════════════════════════════════════════════
+=======
+        // Disponibilité hebdomadaire basée sur le pourcentage d'équipements actifs
+        $totalDevices  = $totals['devices'];
+        $activeDevices = $onlineStats['firewalls'] + $onlineStats['routers'] + $onlineStats['switches'];
+        $currentAvailability = $totalDevices > 0 ? round(($activeDevices / $totalDevices) * 100, 1) : 99.7;
+
+        $weeklyAvailability = [];
+        $variations = [0, -0.3, 0.2, -0.1, 0.4, -0.2, 0.1];
+        foreach ($variations as $var) {
+            $weeklyAvailability[] = max(0, min(100, round($currentAvailability + $var, 1)));
+        }
+
+        // Charge des équipements
+        $firewallCpuAvg  = $firewallCollection->pluck('cpu')->filter()->avg();
+        $firewallLoadAvg = $firewallCpuAvg ? round($firewallCpuAvg) : 50;
+
+        $interfacesActive = $routerCollection->sum('interfaces_up_count');
+        $interfacesTotal  = $routerCollection->sum('interfaces_count');
+        $routerLoadAvg    = $interfacesTotal > 0 ? round(($interfacesActive / $interfacesTotal) * 100) : 50;
+
+        $portsUsed     = $switchCollection->sum('ports_used');
+        $portsTotal    = $switchCollection->sum('ports_total');
+        $switchLoadAvg = $portsTotal > 0 ? round(($portsUsed / $portsTotal) * 100) : 50;
+
+        $loadVariations = [
+            'firewall' => [-5, -2, 10, 15, 5, 0],
+            'router'   => [-3,  0,  8, 12, 4, -2],
+            'switch'   => [-4, -1,  7, 10, 3, -1],
+        ];
+
+        $loadData = [
+            'labels'    => ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'],
+            'firewalls' => [],
+            'routers'   => [],
+            'switches'  => [],
+        ];
+        foreach ($loadVariations['firewall'] as $var) {
+            $loadData['firewalls'][] = max(0, min(100, $firewallLoadAvg + $var));
+        }
+        foreach ($loadVariations['router'] as $var) {
+            $loadData['routers'][] = max(0, min(100, $routerLoadAvg + $var));
+        }
+        foreach ($loadVariations['switch'] as $var) {
+            $loadData['switches'][] = max(0, min(100, $switchLoadAvg + $var));
+        }
+
+>>>>>>> 6c11a86efad3a9258b108f90a0d4577ed02aa423
         // 9. Chart data
         // ════════════════════════════════════════════════════════════
 
@@ -261,6 +313,7 @@ class DashboardController extends Controller
         $recentFirewalls = $this->getRecentModels(Firewall::class);
         $recentBackups   = Backup::latest()->limit(5)->get();
 
+<<<<<<< HEAD
         // ════════════════════════════════════════════════════════════
         // 11. Utilisateurs (admin uniquement)
         //
@@ -273,6 +326,9 @@ class DashboardController extends Controller
         //            que le JSON contient true/false et non 0/1.
         // ════════════════════════════════════════════════════════════
 
+=======
+        // 11. Utilisateurs (admins uniquement)
+>>>>>>> 6c11a86efad3a9258b108f90a0d4577ed02aa423
         $usersForJs = [];
         $userTotals = [];
 
@@ -315,7 +371,10 @@ class DashboardController extends Controller
             ];
         }
 
+<<<<<<< HEAD
         // ════════════════════════════════════════════════════════════
+=======
+>>>>>>> 6c11a86efad3a9258b108f90a0d4577ed02aa423
         // 12. Permissions
         // ════════════════════════════════════════════════════════════
 
@@ -336,7 +395,11 @@ class DashboardController extends Controller
         $sitesForJs = $sites->map(fn($s) => [
             'id'                => $s->id,
             'name'              => $s->name,
+<<<<<<< HEAD
             'code'              => $s->code,              // ← ajouté
+=======
+            'code'              => $s->code,
+>>>>>>> 6c11a86efad3a9258b108f90a0d4577ed02aa423
             'address'           => $s->address,
             'postal_code'       => $s->postal_code,
             'city'              => $s->city,
@@ -344,11 +407,23 @@ class DashboardController extends Controller
             'technical_contact' => $s->technical_contact,
             'technical_email'   => $s->technical_email,
             'phone'             => $s->phone,
+<<<<<<< HEAD
             'description'       => $s->description,       // ← ajouté
             'status'            => $s->status,            // ← ajouté
             'switches_count'    => $s->switches_count,
             'routers_count'     => $s->routers_count,
             'firewalls_count'   => $s->firewalls_count,
+=======
+            'description'       => $s->description,
+            'notes'             => $s->notes,
+            'switches_count'    => $s->switches_count,
+            'routers_count'     => $s->routers_count,
+            'firewalls_count'   => $s->firewalls_count,
+            // Ajout des IDs pour la sélection
+            'switches_ids'      => $s->switches->pluck('id')->toArray(),
+            'routers_ids'       => $s->routers->pluck('id')->toArray(),
+            'firewalls_ids'     => $s->firewalls->pluck('id')->toArray(),
+>>>>>>> 6c11a86efad3a9258b108f90a0d4577ed02aa423
         ])->values()->toArray();
 
         // ════════════════════════════════════════════════════════════
@@ -388,6 +463,7 @@ class DashboardController extends Controller
         ));
     }
 
+<<<<<<< HEAD
     // ════════════════════════════════════════════════════════════════
     // Méthodes privées
     // ════════════════════════════════════════════════════════════════
@@ -406,6 +482,8 @@ class DashboardController extends Controller
         ][$type] ?? [0, 0, 0, 0, 0, 0];
     }
 
+=======
+>>>>>>> 6c11a86efad3a9258b108f90a0d4577ed02aa423
     private function getRecentModels(string $modelClass)
     {
         if (!Gate::allows('viewAny', $modelClass)) {

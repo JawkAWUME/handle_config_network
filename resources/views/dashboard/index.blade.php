@@ -662,6 +662,17 @@
 
             profileMenuOpen: false,
 
+            // Nouveautés pour la sélection d'équipements dans le modal site
+            siteSelectedIds: {
+                switches: [],
+                routers: [],
+                firewalls: []
+            },
+
+            // Pour le feedback visuel temporaire
+            lastAdded: null,
+            lastAddedType: null,
+
             filters: {
                 sites:     { search: '' },
                 switches:  { search: '', status: '', site: '' },
@@ -682,7 +693,9 @@
             switchTab(tab) {
                 this.currentTab = tab;
                 if (tab === 'dashboard') {
-                    this.waitForCanvasAndInit();
+                    this.$nextTick(() => {
+                        this.waitForCanvasAndInit();
+                    });
                 }
             },
 
@@ -696,6 +709,7 @@
 
             getCtx(id) {
                 const el = document.getElementById(id);
+                console.log(`Canvas #${id} trouvé ?`, !!el);
                 if (!el) {
                     console.warn(`Canvas #${id} introuvable dans le DOM`);
                     return null;
@@ -790,6 +804,20 @@
                 }
             },
 
+            waitForCanvasAndInit(attempts = 0) {
+                const canvas = document.getElementById('deviceDistributionChart');
+                if (canvas && canvas.offsetWidth > 0) {
+                    this.initCharts();
+                    return;
+                }
+                if (attempts > 50) { // 5 secondes max (50 * 100ms)
+                    console.warn("Canvas toujours invisible, tentative forcée");
+                    this.initCharts();
+                    return;
+                }
+                setTimeout(() => this.waitForCanvasAndInit(attempts + 1), 200);
+            },
+
             toggleChartType(chartId) {
                 if (!this.charts[chartId]) return;
                 const chart = this.charts[chartId];
@@ -828,19 +856,6 @@
                     if (this.filters.switches.site   && sw.site   !== this.filters.switches.site)   return false;
                     return true;
                 });
-            },
-
-            waitForCanvasAndInit(attempts = 0) {
-                if (attempts > 30) {
-                    this.initCharts();
-                    return;
-                }
-                const canvas = document.getElementById('deviceDistributionChart');
-                if (canvas && canvas.offsetWidth > 0) {
-                    this.initCharts();
-                } else {
-                    setTimeout(() => this.waitForCanvasAndInit(attempts + 1), 100);
-                }
             },
 
             get filteredRouters() {
@@ -887,6 +902,9 @@
 
             // CRUD
             openCreateModal(type) {
+                if (type === 'site') {
+                    this.siteSelectedIds = { switches: [], routers: [], firewalls: [] };
+                }
                 this.currentModal = 'create';
                 this.modalTitle   = `Nouveau ${this.getTypeLabel(type)}`;
                 this.modalData    = { type };
@@ -910,9 +928,9 @@
                     postal_code: '',
                     latitude: '',
                     longitude: '',
-                    contact_name: '',
-                    contact_email: '',
-                    contact_phone: '',
+                    technical_contact: '',
+                    technical_email: '',
+                    phone: '',
                     description: '',
                     notes: ''
                 };
@@ -948,6 +966,11 @@
                 }
 
                 if (type === 'site') {
+                    // Ajout des équipements sélectionnés
+                    this.formData.switches_ids = this.siteSelectedIds.switches;
+                    this.formData.routers_ids = this.siteSelectedIds.routers;
+                    this.formData.firewalls_ids = this.siteSelectedIds.firewalls;
+
                     const method = this.modalData.id ? 'PUT' : 'POST';
                     const url = this.modalData.id ? `/api/sites/${this.modalData.id}` : '/api/sites';
                     try {
@@ -958,6 +981,40 @@
                             } else {
                                 const idx = this.sites.findIndex(s => s.id === this.modalData.id);
                                 if (idx !== -1) this.sites[idx] = result.data;
+
+                                const siteId = this.modalData.id;
+                                const newSwitchIds  = result.data.switches_ids  || [];
+                                const newRouterIds  = result.data.routers_ids   || [];
+                                const newFirewallIds = result.data.firewalls_ids || [];
+
+                                this.switches.forEach(sw => {
+                    if (sw.site_id === siteId && !newSwitchIds.includes(sw.id)) {
+                        sw.site_id = null; // dissocié
+                    } else if (newSwitchIds.includes(sw.id)) {
+                        sw.site_id = siteId; // associé
+                    }
+                });
+
+                // Routeurs
+                this.routers.forEach(rt => {
+                    if (rt.site_id === siteId && !newRouterIds.includes(rt.id)) {
+                        rt.site_id = null;
+                    } else if (newRouterIds.includes(rt.id)) {
+                        rt.site_id = siteId;
+                    }
+                });
+
+                // Firewalls
+                this.firewalls.forEach(fw => {
+                    if (fw.site_id === siteId && !newFirewallIds.includes(fw.id)) {
+                        fw.site_id = null;
+                    } else if (newFirewallIds.includes(fw.id)) {
+                        fw.site_id = siteId;
+                    }
+                });
+                      this.sites[idx].switches_count  = newSwitchIds.length;
+                        this.sites[idx].routers_count   = newRouterIds.length;
+                        this.sites[idx].firewalls_count = newFirewallIds.length;
                             }
                             this.showToast(`Site ${method === 'POST' ? 'créé' : 'mis à jour'}`, 'success');
                             this.closeModal('createEquipmentModal');
@@ -967,7 +1024,7 @@
                 }
 
                 // Équipements (switch, router, firewall)
-               const map = { switch: '/api/switches', router: '/api/routers', firewall: '/api/firewalls' };
+                const map = { switch: '/api/switches', router: '/api/routers', firewall: '/api/firewalls' };
                 let url = map[type];
                 if (!url) return;
 
@@ -988,7 +1045,6 @@
                         this.closeModal('createEquipmentModal');
                     }
                 } catch (e) { console.error(e); }
-                // ... (code existant pour les équipements) ...
             },
 
             viewItem(type, id) {
@@ -1037,7 +1093,6 @@
                 setTimeout(() => { this.toast.show = false; }, 3000);
             },
 
-            // Connectivité (optionnel)
             testConnectivity(type, id) {
                 this.showToast('Fonctionnalité de test non implémentée', 'warning');
             },
@@ -1260,15 +1315,15 @@
                                 </div>
                             </div>`;
                     }
-                    if (item.contact_name || item.contact_email || item.contact_phone) {
-                        html += `
+                     if (item.technical_contact || item.technical_email || item.phone) {
+                         html += `
                             <div style="background:#fef3c7;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--warning-color)">
                                 <h4 style="color:#92400e;margin-bottom:16px"><i class="fas fa-address-book"></i> Contact</h4>
                                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
                                     ${[
-                                        ['Nom', item.contact_name],
-                                        ['Email', item.contact_email],
-                                        ['Téléphone', item.contact_phone]
+                                        ['Nom', item.technical_contact],
+                                        ['Email', item.technical_email],
+                                        ['Téléphone', item.phone]
                                     ].filter(([_, v]) => v).map(([l, v]) => `
                                         <div>
                                             <div style="font-size:.85rem;color:#92400e">${l}</div>
@@ -1277,7 +1332,7 @@
                                     `).join('')}
                                 </div>
                             </div>`;
-                    }
+                      }
                     if (item.firewalls_count || item.routers_count || item.switches_count) {
                         html += `
                             <div style="background:#e0f2fe;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--info-color)">
@@ -1443,6 +1498,21 @@
             },
 
             editItem(type, id) {
+                if (type === 'sites') {
+                    const site = this.sites.find(s => s.id === id);
+                    if (!site) return;
+                    this.formData = { ...site };
+                    this.siteSelectedIds = {
+                        switches: site.switches_ids || [],
+                        routers: site.routers_ids || [],
+                        firewalls: site.firewalls_ids || []
+                    };
+                    this.modalData = { type: 'site', id };
+                    this.modalTitle = `Modifier ${site.name}`;
+                    this.currentModal = 'create';
+                    this.showModal('createEquipmentModal');
+                    return;
+                }
                 const item = this[type].find(i => i.id === id);
                 if (!item) return;
                 this.modalData = { type: type.slice(0, -1), id };
@@ -1463,6 +1533,30 @@
                     this.users = this.users.filter(u => u.id !== id);
                     this.showToast('Utilisateur supprimé', 'success');
                 }
+            },
+
+            // Nouvelle méthode pour toggle équipement site (feedback)
+            toggleSiteEquipment(type, id, name) {
+                const list = this.siteSelectedIds[type];
+                const idx = list.indexOf(id);
+                if (idx === -1) {
+                    list.push(id);
+                    this.lastAdded = name;
+                    this.lastAddedType = type;
+                    setTimeout(() => { this.lastAdded = null; this.lastAddedType = null; }, 2500);
+                } else {
+                    list.splice(idx, 1);
+                }
+            },
+
+            isSiteEquipmentSelected(type, id) {
+                return this.siteSelectedIds[type].includes(id);
+            },
+
+            totalSelectedEquipment() {
+                return this.siteSelectedIds.switches.length
+                     + this.siteSelectedIds.routers.length
+                     + this.siteSelectedIds.firewalls.length;
             }
         };
     }

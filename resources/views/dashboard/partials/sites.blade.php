@@ -2,7 +2,7 @@
     <div class="filters-section">
         <div class="search-box">
             <i class="fas fa-search"></i>
-            <input type="text" x-model="filters.sites.search" @input.debounce="filterSites" placeholder="Rechercher un site...">
+            <input type="text" x-model="filters.sites.search" placeholder="Rechercher un site..." autocomplete="off">
         </div>
     </div>
 
@@ -116,6 +116,7 @@
     </section>
 </div>
 
+<<<<<<< HEAD
 {{-- ⚠️ Le modal de création/édition de site a été SUPPRIMÉ car il est maintenant centralisé dans modals.blade.php --}}
 
 {{-- ════════════════════════════════════════════════════════════
@@ -488,3 +489,5 @@
     </div>
 </div>
 
+=======
+>>>>>>> 6c11a86efad3a9258b108f90a0d4577ed02aa423

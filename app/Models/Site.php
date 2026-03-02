@@ -1,5 +1,9 @@
 <?php
+<<<<<<< HEAD
 // app/Models/Site.php
+=======
+
+>>>>>>> 6c11a86efad3a9258b108f90a0d4577ed02aa423
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -13,7 +17,11 @@ class Site extends Model
 
     protected $fillable = [
         'name',
+<<<<<<< HEAD
         'code',                  // ← ajouté (champ modal "Code")
+=======
+        'code',
+>>>>>>> 6c11a86efad3a9258b108f90a0d4577ed02aa423
         'address',
         'city',
         'country',
@@ -25,8 +33,13 @@ class Site extends Model
         'status',                // ← ajouté
         'capacity',
         'notes',
+<<<<<<< HEAD
         'latitude',              // ← ajouté (utilisé dans SiteController::store)
         'longitude',             // ← ajouté (utilisé dans SiteController::store)
+=======
+        'latitude',
+        'longitude',
+>>>>>>> 6c11a86efad3a9258b108f90a0d4577ed02aa423
     ];
 
     public function switches(): HasMany
