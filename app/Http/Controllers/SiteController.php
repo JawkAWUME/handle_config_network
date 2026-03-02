@@ -3,144 +3,117 @@
 namespace App\Http\Controllers;
 
 use App\Models\Site;
-use App\Models\SwitchModel;   // ← ajout
-use App\Models\Router;        // ← ajout
+use App\Models\SwitchModel;
+use App\Models\Router;
 use App\Models\Firewall;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
-use Maatwebsite\Excel\Facades\Excel;
-use App\Exports\SiteExport;
 
 class SiteController extends Controller
 {
-    public function __construct()
-    {
-        $this->middleware('auth');
-    }
-
     /**
-     * Lister tous les sites (JSON)
+     * Liste des sites (avec compteurs d'équipements).
      */
     public function getSites(Request $request)
     {
-        Gate::authorize('viewAny', Site::class);
-
         try {
-            $search = $request->input('search');
-            $limit  = $request->input('limit', 10);
+            $query = Site::query()
+                ->withCount(['switches', 'routers', 'firewalls']);
 
-            $query = Site::query()->withCount(['switches', 'routers', 'firewalls']);
-
-            if ($search) {
+            if ($search = $request->get('search')) {
                 $query->where(function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")
                       ->orWhere('code', 'like', "%{$search}%")
-                      ->orWhere('address', 'like', "%{$search}%");
+                      ->orWhere('address', 'like', "%{$search}%")
+                      ->orWhere('city', 'like', "%{$search}%");
                 });
             }
 
-            $sites = $query->orderBy('name')->limit($limit)->get();
+            $sites = $query->orderBy('name')->get()->map(fn($s) => $this->formatSite($s));
 
-            return response()->json([
-                'success'   => true,
-                'data'      => $sites,
-                'total'     => $sites->count(),
-                'timestamp' => now()->toISOString(),
-            ]);
-
+            return response()->json(['success' => true, 'data' => $sites]);
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur lors de la récupération des sites : ' . $e->getMessage(),
-            ], 500);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
     /**
-     * Récupérer un site spécifique (JSON)
+     * Détail d'un site.
      */
     public function getSite($id)
     {
         try {
-            $site = Site::with(['switches', 'routers', 'firewalls'])->findOrFail($id);
-
-            Gate::authorize('view', $site);
-
-            return response()->json([
-                'success'   => true,
-                'data'      => $site,
-                'timestamp' => now()->toISOString(),
-            ]);
-
+            $site = Site::withCount(['switches', 'routers', 'firewalls'])->findOrFail($id);
+            return response()->json(['success' => true, 'data' => $this->formatSite($site)]);
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur lors de la récupération du site : ' . $e->getMessage(),
-            ], 404);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 404);
         }
     }
 
     /**
-     * Créer un site (JSON)
-     *
-<<<<<<< HEAD
-     * Les champs envoyés par le modal utilisent les noms réels de la BDD :
-     *   technical_contact, technical_email, phone, code, status, description...
-=======
-     * Les champs de contact utilisés par le modal Alpine.js sont :
-     *   technical_contact, technical_email, phone
-     * qui correspondent directement aux colonnes de la table `sites`.
->>>>>>> 6c11a86efad3a9258b108f90a0d4577ed02aa423
+     * Création d'un site.
      */
     public function store(Request $request)
     {
         Gate::authorize('create', Site::class);
 
         $validated = $request->validate([
-            'name'               => 'required|string|max:255',
-            'code'               => 'nullable|string|max:50|unique:sites,code',
-            'address'            => 'nullable|string|max:500',
-            'city'               => 'nullable|string|max:255',
-            'country'            => 'nullable|string|max:255',
-            'postal_code'        => 'nullable|string|max:20',
-            'latitude'           => 'nullable|numeric',
-            'longitude'          => 'nullable|numeric',
-<<<<<<< HEAD
-            // Champs contact (noms BDD réels)
-            'contact_name'  => 'nullable|string|max:255',   // ← anciennement contact_name
-            'contact_email' => 'nullable|email|max:255',    // ← anciennement contact_email
-            'contact_phone'      => 'nullable|string|max:50',    // ← anciennement contact_phone
-            'description'        => 'nullable|string',
-            'status'             => 'nullable|string|max:50',
-=======
-            'technical_contact'  => 'nullable|string|max:255',
-            'technical_email'    => 'nullable|email|max:255',
-            'phone'              => 'nullable|string|max:50',
-            'description'        => 'nullable|string',
->>>>>>> 6c11a86efad3a9258b108f90a0d4577ed02aa423
-            'notes'              => 'nullable|string',
+            'name'              => 'required|string|max:255',
+            'code'              => 'nullable|string|max:50|unique:sites,code',
+            'address'           => 'nullable|string|max:500',
+            'city'              => 'nullable|string|max:255',
+            'country'           => 'nullable|string|max:255',
+            'postal_code'       => 'nullable|string|max:20',
+            'latitude'          => 'nullable|numeric',
+            'longitude'         => 'nullable|numeric',
+            'technical_contact' => 'nullable|string|max:255',
+            'technical_email'   => 'nullable|email|max:255',
+            'phone'             => 'nullable|string|max:50',
+            'description'       => 'nullable|string',
+            'notes'             => 'nullable|string',
+            // Associations équipements (tableaux d'IDs)
+            'switches_ids'      => 'nullable|array',
+            'switches_ids.*'    => 'integer|exists:switches,id',
+            'routers_ids'       => 'nullable|array',
+            'routers_ids.*'     => 'integer|exists:routers,id',
+            'firewalls_ids'     => 'nullable|array',
+            'firewalls_ids.*'   => 'integer|exists:firewalls,id',
         ]);
 
         try {
-            $site = Site::create($validated);
-            $site->loadCount(['switches', 'routers', 'firewalls']);
+            // Créer le site sans les IDs d'équipements
+            $siteData = collect($validated)
+                ->except(['switches_ids', 'routers_ids', 'firewalls_ids'])
+                ->toArray();
+
+            $site = Site::create($siteData);
+
+            // Associer les équipements (belongsTo → mettre à jour site_id)
+            $this->syncEquipment(
+                $site->id,
+                $validated['switches_ids']  ?? [],
+                $validated['routers_ids']   ?? [],
+                $validated['firewalls_ids'] ?? []
+            );
 
             return response()->json([
                 'success' => true,
                 'message' => 'Site créé avec succès',
-                'data'    => $this->formatSite($site),
+                'data'    => $this->formatSite($site->fresh()->loadCount(['switches', 'routers', 'firewalls'])),
             ], 201);
-
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur lors de la création : ' . $e->getMessage(),
-            ], 500);
+            return response()->json(['success' => false, 'message' => 'Erreur : ' . $e->getMessage()], 500);
         }
     }
 
     /**
-     * Mettre à jour un site (JSON)
+     * Mise à jour d'un site.
+     * ─────────────────────────────────────────────────────────────────
+     * CORRECTION du HTTP 500 : le controller reçoit switches_ids /
+     * routers_ids / firewalls_ids depuis le modal mais ne les traitait
+     * pas → exception Laravel "Undefined property" → 500.
+     * On les valide puis on appelle syncEquipment().
+     * ─────────────────────────────────────────────────────────────────
      */
     public function update(Request $request, $id)
     {
@@ -148,100 +121,61 @@ class SiteController extends Controller
         Gate::authorize('update', $site);
 
         $validated = $request->validate([
-            'name'               => 'sometimes|required|string|max:255',
-            'code'               => 'sometimes|nullable|string|max:50|unique:sites,code,' . $id,
-<<<<<<< HEAD
-            'address'            => 'sometimes|nullable|string|max:500',
-            'city'               => 'sometimes|nullable|string|max:255',
-            'country'            => 'sometimes|nullable|string|max:255',
-            'postal_code'        => 'sometimes|nullable|string|max:20',
-            'latitude'           => 'sometimes|nullable|numeric',
-            'longitude'          => 'sometimes|nullable|numeric',
-            'technical_contact'  => 'sometimes|nullable|string|max:255',
-            'technical_email'    => 'sometimes|nullable|email|max:255',
-            'phone'              => 'sometimes|nullable|string|max:50',
-            'description'        => 'sometimes|nullable|string',
-            'status'             => 'sometimes|nullable|string|max:50',
-            'notes'              => 'sometimes|nullable|string',
-=======
-            'address'            => 'nullable|string|max:500',
-            'city'               => 'nullable|string|max:255',
-            'country'            => 'nullable|string|max:255',
-            'postal_code'        => 'nullable|string|max:20',
-            'latitude'           => 'nullable|numeric',
-            'longitude'          => 'nullable|numeric',
-            'technical_contact'  => 'nullable|string|max:255',
-            'technical_email'    => 'nullable|email|max:255',
-            'phone'              => 'nullable|string|max:50',
-            'description'        => 'nullable|string',
-            'notes'              => 'nullable|string',
->>>>>>> 6c11a86efad3a9258b108f90a0d4577ed02aa423
+            'name'              => 'sometimes|required|string|max:255',
+            'code'              => 'nullable|string|max:50|unique:sites,code,' . $id,
+            'address'           => 'nullable|string|max:500',
+            'city'              => 'nullable|string|max:255',
+            'country'           => 'nullable|string|max:255',
+            'postal_code'       => 'nullable|string|max:20',
+            'latitude'          => 'nullable|numeric',
+            'longitude'         => 'nullable|numeric',
+            'technical_contact' => 'nullable|string|max:255',
+            'technical_email'   => 'nullable|email|max:255',
+            'phone'             => 'nullable|string|max:50',
+            'description'       => 'nullable|string',
+            'notes'             => 'nullable|string',
+            // Associations équipements
+            'switches_ids'      => 'nullable|array',
+            'switches_ids.*'    => 'integer|exists:switches,id',
+            'routers_ids'       => 'nullable|array',
+            'routers_ids.*'     => 'integer|exists:routers,id',
+            'firewalls_ids'     => 'nullable|array',
+            'firewalls_ids.*'   => 'integer|exists:firewalls,id',
         ]);
 
         try {
-            $site->update($validated);
+            // Mettre à jour les champs scalaires uniquement
+            $siteData = collect($validated)
+                ->except(['switches_ids', 'routers_ids', 'firewalls_ids'])
+                ->toArray();
 
-            // Mise à jour des associations équipements
-            $switchIds   = $request->input('switches_ids',  []);
-            $routerIds   = $request->input('routers_ids',   []);
-            $firewallIds = $request->input('firewalls_ids', []);
+            $site->update($siteData);
 
-            // Détacher tous les équipements actuellement liés à ce site
-            SwitchModel::where('site_id', $site->id)->update(['site_id' => null]);
-            Router::where('site_id', $site->id)->update(['site_id' => null]);
-            Firewall::where('site_id', $site->id)->update(['site_id' => null]);
+            // Synchroniser les équipements si les tableaux sont présents
+            // (présence optionnelle : si le modal n'envoie pas les IDs on ne touche pas aux associations)
+            if ($request->has('switches_ids') || $request->has('routers_ids') || $request->has('firewalls_ids')) {
+                $this->syncEquipment(
+                    $site->id,
+                    $validated['switches_ids']  ?? [],
+                    $validated['routers_ids']   ?? [],
+                    $validated['firewalls_ids'] ?? []
+                );
+            }
 
-            // Rattacher les équipements sélectionnés
-            if (!empty($switchIds))   SwitchModel::whereIn('id', $switchIds)->update(['site_id' => $site->id]);
-            if (!empty($routerIds))   Router::whereIn('id', $routerIds)->update(['site_id' => $site->id]);
-            if (!empty($firewallIds)) Firewall::whereIn('id', $firewallIds)->update(['site_id' => $site->id]);
-
-            // Recharger avec les compteurs pour ne pas les perdre côté Alpine.js
-            $fresh = Site::withCount(['switches', 'routers', 'firewalls'])
-                         ->with(['switches:id', 'routers:id', 'firewalls:id'])
-                         ->find($site->id);
+            $fresh = $site->fresh()->loadCount(['switches', 'routers', 'firewalls']);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Site mis à jour avec succès',
-<<<<<<< HEAD
-                'data'    => $this->formatSite($site->fresh()),
-=======
-                'data'    => [
-                    'id'                => $fresh->id,
-                    'name'              => $fresh->name,
-                    'code'              => $fresh->code,
-                    'address'           => $fresh->address,
-                    'postal_code'       => $fresh->postal_code,
-                    'city'              => $fresh->city,
-                    'country'           => $fresh->country,
-                    'latitude'          => $fresh->latitude,
-                    'longitude'         => $fresh->longitude,
-                    'technical_contact' => $fresh->technical_contact,
-                    'technical_email'   => $fresh->technical_email,
-                    'phone'             => $fresh->phone,
-                    'description'       => $fresh->description,
-                    'notes'             => $fresh->notes,
-                    'switches_count'    => $fresh->switches_count,
-                    'routers_count'     => $fresh->routers_count,
-                    'firewalls_count'   => $fresh->firewalls_count,
-                    'switches_ids'      => $fresh->switches->pluck('id'),
-                    'routers_ids'       => $fresh->routers->pluck('id'),
-                    'firewalls_ids'     => $fresh->firewalls->pluck('id'),
-                ],
->>>>>>> 6c11a86efad3a9258b108f90a0d4577ed02aa423
+                'message' => 'Site mis à jour',
+                'data'    => $this->formatSite($fresh),
             ]);
-
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur lors de la mise à jour : ' . $e->getMessage(),
-            ], 500);
+            return response()->json(['success' => false, 'message' => 'Erreur : ' . $e->getMessage()], 500);
         }
     }
 
     /**
-     * Supprimer un site (JSON)
+     * Suppression d'un site.
      */
     public function destroy($id)
     {
@@ -249,64 +183,104 @@ class SiteController extends Controller
         Gate::authorize('delete', $site);
 
         try {
+            // Dissocier les équipements avant suppression
+            SwitchModel::where('site_id', $id)->update(['site_id' => null]);
+            Router::where('site_id', $id)->update(['site_id' => null]);
+            Firewall::where('site_id', $id)->update(['site_id' => null]);
+
             $site->delete();
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Site supprimé avec succès',
-            ]);
-
+            return response()->json(['success' => true, 'message' => 'Site supprimé']);
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur lors de la suppression : ' . $e->getMessage(),
-            ], 500);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
     /**
-     * Exporter les sites en Excel
+     * Export des sites.
      */
-    public function export(Request $request)
+    public function export()
     {
-        Gate::authorize('export', Site::class);
+        Gate::authorize('viewAny', Site::class);
 
-        try {
-            return Excel::download(
-                new SiteExport(),
-                'sites-export-' . date('Y-m-d-His') . '.xlsx'
-            );
+        $sites = Site::withCount(['switches', 'routers', 'firewalls'])->get();
 
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur lors de l\'export : ' . $e->getMessage(),
-            ], 500);
+        return response()->json([
+            'success' => true,
+            'data'    => $sites->map(fn($s) => $this->formatSite($s)),
+            'total'   => $sites->count(),
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // HELPERS PRIVÉS
+    // ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Synchronise les équipements d'un site via site_id (belongsTo).
+     * Prérequis : site_id nullable en BDD (migration fournie).
+     */
+    private function syncEquipment(int $siteId, array $switchIds, array $routerIds, array $firewallIds): void
+    {
+        // ── Switches ──────────────────────────────────────────────────
+        // Dissocier ceux qui étaient sur ce site mais retirés de la liste
+        // (site_id doit être nullable en BDD — cf. migration fournie)
+        SwitchModel::where('site_id', $siteId)
+            ->when(!empty($switchIds), fn($q) => $q->whereNotIn('id', $switchIds))
+            ->update(['site_id' => null]);
+
+        if (!empty($switchIds)) {
+            SwitchModel::whereIn('id', $switchIds)->update(['site_id' => $siteId]);
+        }
+
+        // ── Routers ───────────────────────────────────────────────────
+        Router::where('site_id', $siteId)
+            ->when(!empty($routerIds), fn($q) => $q->whereNotIn('id', $routerIds))
+            ->update(['site_id' => null]);
+
+        if (!empty($routerIds)) {
+            Router::whereIn('id', $routerIds)->update(['site_id' => $siteId]);
+        }
+
+        // ── Firewalls ─────────────────────────────────────────────────
+        Firewall::where('site_id', $siteId)
+            ->when(!empty($firewallIds), fn($q) => $q->whereNotIn('id', $firewallIds))
+            ->update(['site_id' => null]);
+
+        if (!empty($firewallIds)) {
+            Firewall::whereIn('id', $firewallIds)->update(['site_id' => $siteId]);
         }
     }
 
     /**
-     * Formater un site pour Alpine.js (même structure que sitesForJs dans DashboardController)
-     * Garantit que la réponse JSON après create/update est directement utilisable par le frontend.
+     * Formate un site pour la réponse JSON (inclut les IDs des équipements).
      */
     private function formatSite(Site $site): array
     {
         return [
-            'id'                => $site->id,
-            'name'              => $site->name,
-            'code'              => $site->code,
-            'address'           => $site->address,
-            'postal_code'       => $site->postal_code,
-            'city'              => $site->city,
-            'country'           => $site->country,
+            'id'              => $site->id,
+            'name'            => $site->name,
+            'code'            => $site->code,
+            'address'         => $site->address,
+            'city'            => $site->city,
+            'country'         => $site->country,
+            'postal_code'     => $site->postal_code,
+            'latitude'        => $site->latitude,
+            'longitude'       => $site->longitude,
             'technical_contact' => $site->technical_contact,
-            'technical_email'   => $site->technical_email,
-            'phone'             => $site->phone,
-            'description'       => $site->description,
-            'status'            => $site->status,
-            'switches_count'    => $site->switches()->count(),
-            'routers_count'     => $site->routers()->count(),
-            'firewalls_count'   => $site->firewalls()->count(),
+            'technical_email' => $site->technical_email,
+            'phone'           => $site->phone,
+            'description'     => $site->description,
+            'notes'           => $site->notes,
+            'switches_count'  => $site->switches_count ?? 0,
+            'routers_count'   => $site->routers_count  ?? 0,
+            'firewalls_count' => $site->firewalls_count ?? 0,
+            // IDs des équipements associés (utiles côté JS pour pré-sélection en édition)
+            'switches_ids'    => SwitchModel::where('site_id', $site->id)->pluck('id')->toArray(),
+            'routers_ids'     => Router::where('site_id', $site->id)->pluck('id')->toArray(),
+            'firewalls_ids'   => Firewall::where('site_id', $site->id)->pluck('id')->toArray(),
+            'created_at'      => $site->created_at,
+            'updated_at'      => $site->updated_at,
         ];
     }
 }

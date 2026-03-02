@@ -879,26 +879,56 @@
             },
 
             // API helper
-            async apiRequest(url, method = 'GET', data = null) {
-                const options = {
-                    method,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                        'Accept': 'application/json',
-                    },
-                };
-                if (data) options.body = JSON.stringify(data);
-                try {
-                    const res = await fetch(url, options);
-                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                    return await res.json();
-                } catch (err) {
-                    console.error('API Error:', err);
-                    this.showToast('Erreur de communication avec le serveur', 'danger');
-                    throw err;
-                }
-            },
+           async apiRequest(url, method = 'GET', data = null) {
+    const options = {
+        method,
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            'Accept': 'application/json',
+        },
+    };
+    if (data) options.body = JSON.stringify(data);
+
+    try {
+        const res = await fetch(url, options);
+
+        // ── DIAGNOSTIC : lire et afficher le body brut ──────────────
+        const rawText = await res.text();
+        console.group(`[apiRequest] ${method} ${url} → HTTP ${res.status}`);
+        console.log('Payload envoyé :', data ? JSON.parse(JSON.stringify(data)) : null);
+        console.log('Réponse brute  :', rawText.substring(0, 2000));
+
+        let parsed = null;
+        try {
+            parsed = JSON.parse(rawText);
+            console.log('Réponse JSON   :', parsed);
+        } catch {
+            console.warn('Réponse non-JSON (HTML Laravel error page ?)');
+        }
+        console.groupEnd();
+        // ─────────────────────────────────────────────────────────────
+
+        if (!res.ok) {
+            // Afficher le message d'erreur Laravel lisible
+            const msg = parsed?.message
+                || (parsed?.errors ? Object.values(parsed.errors).flat().join(' | ') : null)
+                || `HTTP ${res.status}`;
+
+            this.showToast('Erreur serveur : ' + msg, 'danger');
+            throw new Error(`HTTP ${res.status} — ${msg}`);
+        }
+
+        return parsed ?? {};
+
+    } catch (err) {
+        if (!err.message.startsWith('HTTP')) {
+            console.error('[apiRequest] Erreur réseau :', err);
+            this.showToast('Erreur réseau', 'danger');
+        }
+        throw err;
+    }
+},
 
             // CRUD
             openCreateModal(type) {
@@ -965,64 +995,78 @@
                     return;
                 }
 
-                if (type === 'site') {
-                    // Ajout des équipements sélectionnés
-                    this.formData.switches_ids = this.siteSelectedIds.switches;
-                    this.formData.routers_ids = this.siteSelectedIds.routers;
-                    this.formData.firewalls_ids = this.siteSelectedIds.firewalls;
+               if (type === 'site') {
 
-                    const method = this.modalData.id ? 'PUT' : 'POST';
-                    const url = this.modalData.id ? `/api/sites/${this.modalData.id}` : '/api/sites';
-                    try {
-                        const result = await this.apiRequest(url, method, this.formData);
-                        if (result.success) {
-                            if (method === 'POST') {
-                                this.sites.push(result.data);
-                            } else {
-                                const idx = this.sites.findIndex(s => s.id === this.modalData.id);
-                                if (idx !== -1) this.sites[idx] = result.data;
+    const method = this.modalData.id ? 'PUT' : 'POST';
+    const url    = this.modalData.id ? `/api/sites/${this.modalData.id}` : '/api/sites';
 
-                                const siteId = this.modalData.id;
-                                const newSwitchIds  = result.data.switches_ids  || [];
-                                const newRouterIds  = result.data.routers_ids   || [];
-                                const newFirewallIds = result.data.firewalls_ids || [];
+    try {
+        const result = await this.apiRequest(url, method, this.formData);
 
-                                this.switches.forEach(sw => {
+        if (result.success) {
+
+            if (method === 'POST') {
+                // ── Création : ajouter le site à la liste ──────────
+                this.sites = [...this.sites, result.data];
+
+            } else {
+                // ── Édition ────────────────────────────────────────
+
+                const siteId        = this.modalData.id;
+                const newSwitchIds  = result.data.switches_ids  || [];
+                const newRouterIds  = result.data.routers_ids   || [];
+                const newFirewallIds = result.data.firewalls_ids || [];
+
+                // 1. Mettre à jour le site dans le tableau (spread → réactivité)
+                this.sites = this.sites.map(s =>
+                    s.id === siteId ? { ...s, ...result.data } : s
+                );
+
+                // 2. Mettre à jour site_id sur chaque switch
+                //    (nouvelle référence → Alpine détecte le changement)
+                this.switches = this.switches.map(sw => {
                     if (sw.site_id === siteId && !newSwitchIds.includes(sw.id)) {
-                        sw.site_id = null; // dissocié
-                    } else if (newSwitchIds.includes(sw.id)) {
-                        sw.site_id = siteId; // associé
+                        return { ...sw, site_id: null };          // dissocié
                     }
+                    if (newSwitchIds.includes(sw.id)) {
+                        return { ...sw, site_id: siteId };        // associé / conservé
+                    }
+                    return sw;                                     // non concerné
                 });
 
-                // Routeurs
-                this.routers.forEach(rt => {
+                // 3. Idem pour les routeurs
+                this.routers = this.routers.map(rt => {
                     if (rt.site_id === siteId && !newRouterIds.includes(rt.id)) {
-                        rt.site_id = null;
-                    } else if (newRouterIds.includes(rt.id)) {
-                        rt.site_id = siteId;
+                        return { ...rt, site_id: null };
                     }
+                    if (newRouterIds.includes(rt.id)) {
+                        return { ...rt, site_id: siteId };
+                    }
+                    return rt;
                 });
 
-                // Firewalls
-                this.firewalls.forEach(fw => {
+                // 4. Idem pour les firewalls
+                this.firewalls = this.firewalls.map(fw => {
                     if (fw.site_id === siteId && !newFirewallIds.includes(fw.id)) {
-                        fw.site_id = null;
-                    } else if (newFirewallIds.includes(fw.id)) {
-                        fw.site_id = siteId;
+                        return { ...fw, site_id: null };
                     }
+                    if (newFirewallIds.includes(fw.id)) {
+                        return { ...fw, site_id: siteId };
+                    }
+                    return fw;
                 });
-                      this.sites[idx].switches_count  = newSwitchIds.length;
-                        this.sites[idx].routers_count   = newRouterIds.length;
-                        this.sites[idx].firewalls_count = newFirewallIds.length;
-                            }
-                            this.showToast(`Site ${method === 'POST' ? 'créé' : 'mis à jour'}`, 'success');
-                            this.closeModal('createEquipmentModal');
-                        }
-                    } catch (e) { console.error(e); }
-                    return;
-                }
+            }
 
+            this.showToast(`Site ${method === 'POST' ? 'créé' : 'mis à jour'}`, 'success');
+            this.closeModal('createEquipmentModal');
+        }
+
+    } catch (e) {
+        console.error('saveEquipment site error:', e);
+    }
+
+    return;
+}
                 // Équipements (switch, router, firewall)
                 const map = { switch: '/api/switches', router: '/api/routers', firewall: '/api/firewalls' };
                 let url = map[type];
