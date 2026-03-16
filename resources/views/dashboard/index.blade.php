@@ -676,6 +676,9 @@
             toast: { show: false, message: '', type: 'info' },
 
             init() {
+                if (this._initialized) return;   // ← AJOUTER ce verrou
+                this._initialized = true;
+
                 if (this.totals.devices === 0) {
                     this.totals.devices = this.totals.firewalls + this.totals.routers + this.totals.switches;
                 }
@@ -686,8 +689,9 @@
             switchTab(tab) {
                 this.currentTab = tab;
                 if (tab === 'dashboard') {
+                    // Double nextTick + setTimeout pour laisser Alpine finir le rendu DOM
                     this.$nextTick(() => {
-                        this.$nextTick(() => this.initCharts());
+                        setTimeout(() => this.initCharts(), 50);
                     });
                 }
             },
@@ -703,11 +707,12 @@
             getCtx(id) {
                 const el = document.getElementById(id);
                 if (!el) {
-                    console.warn(`Canvas #${id} introuvable`);
+                    console.warn(`Canvas #${id} introuvable dans le DOM`);
                     return null;
                 }
-                if (el.offsetParent === null && el.style.display === 'none') {
-                    console.warn(`Canvas #${id} non visible`);
+                // Vérification que le canvas est réellement visible et a des dimensions
+                if (el.offsetWidth === 0 || el.offsetHeight === 0) {
+                    console.warn(`Canvas #${id} a des dimensions nulles (parent caché ?)`);
                     return null;
                 }
                 return el.getContext('2d');
@@ -817,10 +822,22 @@
                 if (!this.charts[chartId]) return;
                 const chart = this.charts[chartId];
                 const types = ['pie', 'bar', 'line'];
-                const next  = types[(types.indexOf(chart.config.type) + 1) % types.length];
-                chart.config.type = next;
-                chart.update();
-                this.showToast(`Graphique : ${next}`, 'info');
+                const nextType = types[(types.indexOf(chart.config.type) + 1) % types.length];
+                
+                // Sauvegarder les données
+                const data = chart.config.data;
+                const options = chart.config.options;
+                const canvasId = chart.canvas.id;
+                
+                // Détruire l'ancienne instance
+                chart.destroy();
+                
+                // Recréer avec le nouveau type
+                const ctx = document.getElementById(canvasId)?.getContext('2d');
+                if (ctx) {
+                    this.charts[chartId] = new Chart(ctx, { type: nextType, data, options });
+                }
+                this.showToast(`Graphique : ${nextType}`, 'info');
             },
 
             // Filtres
@@ -865,23 +882,83 @@
             },
 
             // API helper
-            async apiRequest(url, method = 'GET', data = null) {
+            async refreshCsrfToken() {
+                try {
+                    // Récupérer un nouveau token CSRF via une requête légère
+                    const res = await fetch('/csrf-token', { headers: { 'Accept': 'application/json' } });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.token) {
+                            document.querySelector('meta[name="csrf-token"]').content = data.token;
+                            return data.token;
+                        }
+                    }
+                } catch (e) { /* ignore */ }
+                return null;
+            },
+
+            async apiRequest(url, method = 'GET', data = null, isRetry = false) {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
                 const options = {
                     method,
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'X-CSRF-TOKEN': csrfToken,
                         'Accept': 'application/json',
                     },
                 };
                 if (data) options.body = JSON.stringify(data);
                 try {
                     const res = await fetch(url, options);
-                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                    return await res.json();
+                    const contentType = res.headers.get('Content-Type') || '';
+
+                    // ── 419 CSRF : peut arriver en JSON ou en HTML selon Laravel ──
+                    // Tester le status 419 EN PREMIER, avant tout traitement du corps
+                    if (res.status === 419) {
+                        if (!isRetry) {
+                            this.showToast('Session expirée, renouvellement en cours…', 'info');
+                            const newToken = await this.refreshCsrfToken();
+                            if (newToken) {
+                                return this.apiRequest(url, method, data, true);
+                            }
+                        }
+                        this.showToast('Session expirée — veuillez recharger la page', 'danger');
+                        throw new Error('Session expirée (419)');
+                    }
+
+                    // ── Réponse non-JSON (HTML d'erreur, redirect login, etc.) ──
+                    if (!contentType.includes('application/json')) {
+                        if (res.status === 401) {
+                            this.showToast('Non autorisé — veuillez recharger la page', 'danger');
+                            throw new Error('Non autorisé (401)');
+                        }
+                        const text = await res.text();
+                        console.error(`Réponse non-JSON (HTTP ${res.status}):`, text.substring(0, 500));
+                        this.showToast(`Erreur serveur (HTTP ${res.status}) — voir la console`, 'danger');
+                        throw new Error(`Réponse non-JSON (HTTP ${res.status})`);
+                    }
+
+                    const json = await res.json();
+
+                    if (!res.ok) {
+                        // Afficher les erreurs de validation Laravel champ par champ
+                        if (res.status === 422 && json.errors) {
+                            const messages = Object.values(json.errors).flat().join(' · ');
+                            this.showToast(`Validation : ${messages}`, 'danger');
+                            throw new Error(messages);
+                        }
+                        const msg = json.message || `HTTP ${res.status}`;
+                        this.showToast(msg, 'danger');
+                        throw new Error(msg);
+                    }
+
+                    return json;
                 } catch (err) {
-                    console.error('API Error:', err);
-                    this.showToast('Erreur de communication avec le serveur', 'danger');
+                    if (!err.message?.includes('Session') && !err.message?.includes('Validation')
+                        && !err.message?.includes('non-JSON') && !err.message?.includes('autorisé')) {
+                        console.error('API Error:', err);
+                        this.showToast('Erreur de communication avec le serveur', 'danger');
+                    }
                     throw err;
                 }
             },
@@ -900,7 +977,7 @@
                                 ip_nms:'', vlan_nms:'', ip_service:'', vlan_service:'', configuration:'' };
                 if (type === 'switch')   return { ...base, ports_total: 24, vlans: 10 };
                 if (type === 'router')   return { ...base, management_ip:'', interfaces_count: 24, interfaces_up_count: 22 };
-                if (type === 'firewall') return { ...base, security_policies_count: 0, cpu: 0, memory: 0 };
+                if (type === 'firewall') return { ...base, firewall_type: 'other', security_policies_count: 0, cpu: 0, memory: 0 };
                 if (type === 'user')     return { name:'', email:'', password:'', password_confirmation:'', role:'agent', department:'', phone:'', is_active:true };
                 return base;
             },
@@ -909,33 +986,132 @@
                 return { site:'Site', switch:'Switch', router:'Routeur', firewall:'Firewall' }[type] || type;
             },
 
-            async saveEquipment() {
+             async saveEquipment() {
                 const type = this.modalData.type;
+
                 if (type === 'user') {
-                    const method = this.modalData.id ? 'PUT' : 'POST';
-                    const url = this.modalData.id ? `/api/users/${this.modalData.id}` : '/api/users';
-                    try {
-                        const result = await this.apiRequest(url, method, this.formData);
-                        if (result.success) {
-                            if (method === 'POST') {
-                                this.users.push(result.data);
-                            } else {
-                                const idx = this.users.findIndex(u => u.id === this.modalData.id);
-                                if (idx !== -1) this.users[idx] = result.data;
-                                if (this.currentUser.id === result.data.id) {
-                                    this.currentUser = result.data;
-                                }
-                            }
-                            this.showToast(`Utilisateur ${method === 'POST' ? 'créé' : 'mis à jour'}`, 'success');
-                            this.closeModal('createEquipmentModal');
-                        }
-                    } catch (e) { console.error(e); }
+                    if (this.formData.password && this.formData.password !== this.formData.password_confirmation) {
+                        this.showToast('Les mots de passe ne correspondent pas', 'danger'); return;
+                    }
+                    const method  = this.modalData.id ? 'PUT' : 'POST';
+                    const url     = this.modalData.id ? `/api/users/${this.modalData.id}` : '/api/users';
+                    // Construire un payload propre — uniquement les champs utilisateur
+                    const payload = {
+                        name:       this.formData.name       || '',
+                        email:      this.formData.email      || '',
+                        role:       this.formData.role       || 'agent',
+                        department: this.formData.department || '',
+                        phone:      this.formData.phone      || '',
+                        // is_active peut arriver en string "true"/"false" depuis Alpine radio → convertir
+                        is_active:  this.formData.is_active === true || this.formData.is_active === 'true',
+                    };
+                    if (this.formData.password) {
+                        payload.password = this.formData.password;
+                        payload.password_confirmation = this.formData.password_confirmation;
+                    }
+                    const result = await this.apiRequest(url, method, payload);
+                    if (result.success) {
+                        this.users = method === 'POST'
+                            ? [...this.users, result.data]
+                            : this.users.map(u => u.id === this.modalData.id ? { ...u, ...result.data } : u);
+                        if (this.currentUser.id === result.data.id) this.currentUser = { ...this.currentUser, ...result.data };
+                        this.showToast(`Utilisateur ${method === 'POST' ? 'créé' : 'mis à jour'}`, 'success');
+                        this.closeModal('createEquipmentModal');
+                    }
                     return;
                 }
-                const map  = { switch: '/api/switches', router: '/api/routers', firewall: '/api/firewalls' };
-                let url    = map[type];
-                if (!url) return;
-                // ... (code existant pour les équipements)
+
+                if (type === 'site') {
+                    const method  = this.modalData.id ? 'PUT' : 'POST';
+                    const url     = this.modalData.id ? `/api/sites/${this.modalData.id}` : '/api/sites';
+                    const payload = {
+                        name:              this.formData.name              || '',
+                        code:              this.formData.code              || '',
+                        description:       this.formData.description       || '',
+                        address:           this.formData.address           || '',
+                        postal_code:       this.formData.postal_code       || '',
+                        city:              this.formData.city              || '',
+                        country:           this.formData.country           || '',
+                        technical_contact: this.formData.technical_contact || this.formData.contact_name  || '',
+                        technical_email:   this.formData.technical_email   || this.formData.contact_email || '',
+                        phone:             this.formData.phone             || this.formData.contact_phone || '',
+                        status:            this.formData.status            || 'active',
+                        capacity:          this.formData.capacity          || 50,
+                        notes:             this.formData.notes             || '',
+                        switches_ids:      this.formData.switches_ids      || [],
+                        routers_ids:       this.formData.routers_ids       || [],
+                        firewalls_ids:     this.formData.firewalls_ids     || [],
+                    };
+                    const result = await this.apiRequest(url, method, payload);
+                    if (result.success) {
+                        const siteId = result.data.id;
+                        const siteForJs = {
+                            ...result.data,
+                            contact_name:  result.data.technical_contact || '',
+                            contact_email: result.data.technical_email   || '',
+                            contact_phone: result.data.phone             || '',
+                            switches_count:  (payload.switches_ids  || []).length,
+                            routers_count:   (payload.routers_ids   || []).length,
+                            firewalls_count: (payload.firewalls_ids || []).length,
+                        };
+                        this.sites = method === 'POST'
+                            ? [...this.sites, siteForJs]
+                            : this.sites.map(s => s.id === this.modalData.id ? { ...s, ...siteForJs } : s);
+                        this.totals.sites = this.sites.length;
+
+                        // Mettre à jour le site_id local des équipements sélectionnés/désélectionnés
+                        const swIds  = payload.switches_ids  || [];
+                        const rtIds  = payload.routers_ids   || [];
+                        const fwIds  = payload.firewalls_ids || [];
+                        this.switches  = this.switches.map(e  => {
+                            if (swIds.includes(e.id))  return { ...e, site_id: siteId };
+                            if (method === 'PUT' && e.site_id === siteId && !swIds.includes(e.id))
+                                return { ...e, site_id: null };
+                            return e;
+                        });
+                        this.routers   = this.routers.map(e  => {
+                            if (rtIds.includes(e.id))  return { ...e, site_id: siteId };
+                            if (method === 'PUT' && e.site_id === siteId && !rtIds.includes(e.id))
+                                return { ...e, site_id: null };
+                            return e;
+                        });
+                        this.firewalls = this.firewalls.map(e => {
+                            if (fwIds.includes(e.id))  return { ...e, site_id: siteId };
+                            if (method === 'PUT' && e.site_id === siteId && !fwIds.includes(e.id))
+                                return { ...e, site_id: null };
+                            return e;
+                        });
+
+                        this.showToast(`Site ${method === 'POST' ? 'créé' : 'mis à jour'}`, 'success');
+                        this.closeModal('siteFormModal');
+                    }
+                    return;
+                }
+
+                const urlMap = {
+                    switch:   { plural: 'switches',  base: '/api/switches'  },
+                    router:   { plural: 'routers',   base: '/api/routers'   },
+                    firewall: { plural: 'firewalls', base: '/api/firewalls' },
+                };
+                const cfg    = urlMap[type]; if (!cfg) return;
+                const method = this.modalData.id ? 'PUT' : 'POST';
+                const url    = this.modalData.id ? `${cfg.base}/${this.modalData.id}` : cfg.base;
+                const payload = { ...this.formData };
+                if (payload.status !== undefined) {
+                    // Force la conversion en string 'active' ou 'danger' pour passer la validation Laravel
+                    let isActive = (payload.status === true || payload.status === 'active' || payload.status === 'true' || payload.status === 1);
+                    payload.status = isActive ? 'active' : 'danger';
+                }
+                const result = await this.apiRequest(url, method, payload);
+                if (result.success) {
+                    this[cfg.plural] = method === 'POST'
+                        ? [...this[cfg.plural], result.data]
+                        : this[cfg.plural].map(i => i.id === this.modalData.id ? { ...i, ...result.data } : i);
+                    this.totals.devices = this.firewalls.length + this.routers.length + this.switches.length;
+                    this.chartData.deviceDistribution.data = [this.totals.firewalls, this.totals.routers, this.totals.switches];
+                    this.showToast(`${this.getTypeLabel(type)} ${method === 'POST' ? 'créé' : 'mis à jour'}`, 'success');
+                    this.closeModal('createEquipmentModal');
+                }
             },
 
             viewItem(type, id) {
@@ -947,8 +1123,19 @@
                 this.showModal('viewEquipmentModal');
             },
 
-            async deleteItem(type, id) {
-                if (!confirm('Supprimer cet élément ?')) return;
+            deleteItem(type, id) {
+                // Trouver le nom de l'élément pour affichage dans le modal
+                const pluralMap = { sites: 'sites', switches: 'switches', routers: 'routers', firewalls: 'firewalls' };
+                const items = this[pluralMap[type]] || [];
+                const item  = items.find(i => i.id === id);
+                this.deleteTarget = { type, id, name: item?.name || `#${id}`, label: { sites: 'site', switches: 'switch', routers: 'routeur', firewalls: 'firewall' }[type] || type };
+                this.currentModal = 'confirmDelete';
+                this.showModal('confirmDeleteModal');
+            },
+
+            async confirmDelete() {
+                if (!this.deleteTarget) return;
+                const { type, id } = this.deleteTarget;
                 const urls = { sites:'/api/sites', switches:'/api/switches', routers:'/api/routers', firewalls:'/api/firewalls' };
                 const url  = urls[type];
                 if (!url) return;
@@ -959,6 +1146,10 @@
                         this.showToast('Suppression réussie', 'success');
                     }
                 } catch (e) { console.error('Delete error:', e); }
+                finally {
+                    this.closeModal('confirmDeleteModal');
+                    this.deleteTarget = null;
+                }
             },
 
             // Modals
@@ -975,6 +1166,24 @@
                     this.modalData    = {};
                     this.formData     = {};
                 });
+                this.userToToggle = null;
+            },
+
+            editItem(type, id) {
+                const singularMap = { switches: 'switch', routers: 'router', firewalls: 'firewall', sites: 'site', users: 'user' };
+                if (type === 'sites') {
+                    const site = this.sites.find(s => s.id === id); if (!site) return;
+                    this.formData = { ...site, contact_name: site.contact_name || site.technical_contact || '', contact_email: site.contact_email || site.technical_email || '', contact_phone: site.contact_phone || site.phone || '' };
+                    this.siteSelectedIds = { switches: site.switches_ids || [], routers: site.routers_ids || [], firewalls: site.firewalls_ids || [] };
+                    this.modalData = { type: 'site', id }; this.modalTitle = `Modifier ${site.name}`; this.currentModal = 'create';
+                    this.showModal('siteFormModal'); return;
+                }
+                const item = this[type]?.find(i => i.id === id); if (!item) return;
+                this.modalData    = { type: singularMap[type] || type.slice(0, -1), id };
+                this.formData     = { ...item };
+                this.currentModal = 'create';
+                this.modalTitle   = `Modifier ${item.name}`;
+                this.showModal('createEquipmentModal');
             },
 
             // Toast
@@ -983,8 +1192,7 @@
                 setTimeout(() => { this.toast.show = false; }, 3000);
             },
 
-            // Connectivité (optionnel)
-            // ... (le code existant pour testConnectivity, etc.)
+
 
             // Configuration ports / interfaces / policies
             configurePorts(switchId) {
@@ -1010,7 +1218,7 @@
                 const item = this.routers.find(r => r.id === routerId);
                 if (!item) return;
                 this.currentModal = 'updateInterfaces';
-                this.modalTitle   = `Interfaces : ${item.name}`;
+                this.modalTitle   = `Configuration : ${item.name}`;
                 this.modalData    = { type: 'router', item };
                 this.formData     = { interfacesConfig: '' };
                 this.showModal('updateInterfacesModal');
@@ -1131,165 +1339,269 @@
                         if (!item) return '';
 
                         const isActive = item.status === 'active' || item.status === true;
-                        let html = '<div style="display:grid;gap:24px;">';
-
-                        // --- Informations générales (communes à tous) ---
-                        // Pour un site, on adapte les champs affichés
-                        let generalFields = [];
-                        if (type === 'site') {
-                            generalFields = [
-                                ['Nom', item.name],
-                                ['Code', item.code],
-                                ['Ville', item.city],
-                                ['Pays', item.country],
-                            ];
-                        } else {
-                            generalFields = [
-                                ['Nom', item.name],
-                                ['Site', item.site || 'N/A'],
-                                ['Marque', item.brand || 'N/A'],
-                                ['Modèle', item.model || 'N/A'],
-                                ['N° série', item.serial_number || 'N/A'],
-                            ];
-                        }
-
-                        html += `
-                            <div style="background:#f8fafc;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--primary-color)">
-                                <h4 style="color:var(--primary-color);margin-bottom:16px"><i class="fas fa-info-circle"></i> Informations générales</h4>
-                                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
-                                    ${generalFields.map(([l, v]) => `
-                                        <div>
-                                            <div style="font-size:.85rem;color:var(--text-light)">${l}</div>
-                                            <div style="font-weight:600">${v || 'N/A'}</div>
-                                        </div>
-                                    `).join('')}
-                                    <div>
-                                        <div style="font-size:.85rem;color:var(--text-light)">Statut</div>
-                                        <span class="status-badge ${isActive ? 'status-active' : 'status-danger'}">
-                                            <i class="fas ${isActive ? 'fa-check-circle' : 'fa-times-circle'}"></i>
-                                            ${isActive ? 'Actif' : 'Inactif'}
-                                        </span>
-                                    </div>
+                        const statusBadge = (active) => `<span class="status-badge ${active ? 'status-active' : 'status-danger'}"><i class="fas ${active ? 'fa-check-circle' : 'fa-times-circle'}"></i> ${active ? 'Actif' : 'Inactif'}</span>`;
+                        const field = (label, value, mono=false) => `
+                            <div style="background:white;padding:12px 14px;border-radius:8px;border:1px solid #e5e7eb;">
+                                <div style="font-size:.75rem;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">${label}</div>
+                                <div style="font-weight:600;font-size:.9rem;color:#111827;${mono?'font-family:monospace;':''}">${value || '<span style="color:#9ca3af">N/A</span>'}</div>
+                            </div>`;
+                        const section = (title, icon, color, bg, fields) => `
+                            <div style="border-radius:10px;overflow:hidden;border:1px solid ${color}30;">
+                                <div style="background:${bg};padding:12px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid ${color}30;">
+                                    <i class="fas ${icon}" style="color:${color};font-size:1rem;"></i>
+                                    <span style="font-weight:700;color:${color};font-size:.9rem;">${title}</span>
                                 </div>
+                                <div style="padding:14px;background:white;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">${fields}</div>
                             </div>`;
 
-                        // --- Si c'est un site, afficher les détails spécifiques ---
-                        if (type === 'site') {
-                            // Localisation
-                            if (item.address || item.postal_code || item.city || item.country) {
-                                html += `
-                                    <div style="background:#f0fdf4;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--success-color)">
-                                        <h4 style="color:var(--success-color);margin-bottom:16px"><i class="fas fa-map-marker-alt"></i> Localisation</h4>
-                                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
-                                            ${[
-                                                ['Adresse', item.address],
-                                                ['Code postal', item.postal_code],
-                                                ['Ville', item.city],
-                                                ['Pays', item.country]
-                                            ].filter(([_, v]) => v).map(([l, v]) => `
-                                                <div>
-                                                    <div style="font-size:.85rem;color:var(--text-light)">${l}</div>
-                                                    <div style="font-weight:600">${v}</div>
-                                                </div>
-                                            `).join('')}
-                                        </div>
-                                    </div>`;
-                            }
+                        let html = '<div style="display:grid;gap:16px;">';
 
-                            // Contact
-                            if (item.contact_name || item.contact_email || item.contact_phone) {
-                                html += `
-                                    <div style="background:#fef3c7;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--warning-color)">
-                                        <h4 style="color:#92400e;margin-bottom:16px"><i class="fas fa-address-book"></i> Contact</h4>
-                                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
-                                            ${[
-                                                ['Nom', item.contact_name],
-                                                ['Email', item.contact_email],
-                                                ['Téléphone', item.contact_phone]
-                                            ].filter(([_, v]) => v).map(([l, v]) => `
-                                                <div>
-                                                    <div style="font-size:.85rem;color:#92400e">${l}</div>
-                                                    <div style="font-weight:600">${v}</div>
-                                                </div>
-                                            `).join('')}
-                                        </div>
-                                    </div>`;
-                            }
+                        // ── Header identité + statut ─────────────────────────────
+                        html += `
+                            <div style="display:flex;align-items:center;gap:16px;padding:16px;background:linear-gradient(135deg,#f8fafc,#f1f5f9);border-radius:10px;border:1px solid #e2e8f0;">
+                                <div style="width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,var(--primary-color),var(--accent-color));display:flex;align-items:center;justify-content:center;color:white;font-size:1.4rem;flex-shrink:0;">
+                                    <i class="fas ${type==='switch'?'fa-exchange-alt':type==='router'?'fa-route':'fa-fire'}"></i>
+                                </div>
+                                <div style="flex:1;min-width:0;">
+                                    <div style="font-size:1.15rem;font-weight:800;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.name || 'N/A'}</div>
+                                    <div style="font-size:.82rem;color:#6b7280;margin-top:2px;">${item.brand || ''} ${item.model || ''} ${item.site ? '· '+item.site : ''}</div>
+                                </div>
+                                <div style="flex-shrink:0;">${statusBadge(isActive)}</div>
+                            </div>`;
 
-                            // Équipements associés (optionnel)
-                            if (item.firewalls_count || item.routers_count || item.switches_count) {
-                                html += `
-                                    <div style="background:#e0f2fe;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--info-color)">
-                                        <h4 style="color:#0369a1;margin-bottom:16px"><i class="fas fa-network-wired"></i> Équipements</h4>
-                                        <div style="display:flex;gap:20px;flex-wrap:wrap;">
-                                            <div><span class="status-badge status-danger"><i class="fas fa-fire"></i> Firewalls : ${item.firewalls_count || 0}</span></div>
-                                            <div><span class="status-badge status-info"><i class="fas fa-route"></i> Routeurs : ${item.routers_count || 0}</span></div>
-                                            <div><span class="status-badge status-active"><i class="fas fa-exchange-alt"></i> Switchs : ${item.switches_count || 0}</span></div>
-                                        </div>
-                                    </div>`;
-                            }
-                        } else {
+                        // ── Réseau (commun) ──────────────────────────────────────
+                        html += section('Réseau & Accès', 'fa-network-wired', '#0891b2', '#ecfeff',
+                            field('IP NMS', `<code style="background:#f0f9ff;padding:2px 6px;border-radius:4px;">${item.ip_nms||'N/A'}</code>`, false) +
+                            field('VLAN NMS', item.vlan_nms, false) +
+                            field('IP Service', `<code style="background:#f0f9ff;padding:2px 6px;border-radius:4px;">${item.ip_service||'N/A'}</code>`, false) +
+                            field('VLAN Service', item.vlan_service, false) +
+                            field('Utilisateur', item.username, true) +
+                            field('Mot de passe', '•'.repeat(10) + ' <span style="font-size:.7rem;color:#9ca3af">(masqué)</span>', false)
+                        );
+
+                        // ── Infos spécifiques par type ──────────────────────────
+                        if (type === 'switch') {
+                            // KPIs ports
+                            const portsTotal = item.ports_total || 0;
+                            const portsUsed  = item.ports_used  || 0;
+                            const pct = portsTotal ? Math.round(portsUsed/portsTotal*100) : 0;
+                            const barColor = pct > 85 ? '#dc2626' : pct > 65 ? '#f59e0b' : '#059669';
                             html += `
-                                <div style="background:linear-gradient(135deg,#fef3c7,#fde68a);padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--warning-color)">
-                                    <h4 style="color:#92400e;margin-bottom:16px"><i class="fas fa-key"></i> Credentials d'accès</h4>
-                                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px">
-                                        <div>
-                                            <div style="font-size:.85rem;color:#92400e;margin-bottom:4px;font-weight:600"><i class="fas fa-user-shield"></i> Nom d'utilisateur</div>
-                                            <div style="background:white;padding:10px;border-radius:8px;font-family:monospace;font-weight:600">
-                                                ${item.username || '<span style="color:var(--text-light)">Non configuré</span>'}
+                                <div style="border-radius:10px;overflow:hidden;border:1px solid #6ee7b730;">
+                                    <div style="background:#ecfdf5;padding:12px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #6ee7b730;">
+                                        <i class="fas fa-plug" style="color:#059669;"></i>
+                                        <span style="font-weight:700;color:#059669;font-size:.9rem;">Ports</span>
+                                    </div>
+                                    <div style="padding:14px;background:white;">
+                                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px;">
+                                            <div style="text-align:center;padding:12px;background:#ecfdf5;border-radius:8px;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#059669;">${portsTotal}</div>
+                                                <div style="font-size:.72rem;color:#065f46;font-weight:600;">Total</div>
+                                            </div>
+                                            <div style="text-align:center;padding:12px;background:#eff6ff;border-radius:8px;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#2563eb;">${portsUsed}</div>
+                                                <div style="font-size:.72rem;color:#1e40af;font-weight:600;">Utilisés</div>
+                                            </div>
+                                            <div style="text-align:center;padding:12px;background:#f0fdf4;border-radius:8px;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#16a34a;">${portsTotal - portsUsed}</div>
+                                                <div style="font-size:.72rem;color:#15803d;font-weight:600;">Libres</div>
+                                            </div>
+                                            <div style="text-align:center;padding:12px;background:#fafafa;border-radius:8px;">
+                                                <div style="font-size:1.1rem;font-weight:800;color:#374151;">${item.vlans || 0}</div>
+                                                <div style="font-size:.72rem;color:#6b7280;font-weight:600;">VLANs</div>
                                             </div>
                                         </div>
-                                        <div>
-                                            <div style="font-size:.85rem;color:#92400e;margin-bottom:4px;font-weight:600"><i class="fas fa-lock"></i> Mot de passe</div>
-                                            <div style="background:white;padding:10px;border-radius:8px;font-family:monospace;font-weight:600">
-                                                ${'•'.repeat(12)} <span style="font-size:.75rem;color:var(--text-light)">(crypté)</span>
+                                        <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+                                            <span style="font-size:.8rem;color:#6b7280;">Taux d'utilisation</span>
+                                            <span style="font-size:.8rem;font-weight:700;color:${barColor};">${pct}%</span>
+                                        </div>
+                                        <div style="background:#e2e8f0;border-radius:99px;height:8px;overflow:hidden;">
+                                            <div style="height:100%;border-radius:99px;background:${barColor};width:${pct}%;transition:width .4s;"></div>
+                                        </div>
+                                    </div>
+                                </div>`;
+
+                            html += section('Équipement', 'fa-microchip', '#7c3aed', '#f5f3ff',
+                                field('Firmware', item.firmware_version) +
+                                field('N° série', item.serial_number, true) +
+                                field('Asset tag', item.asset_tag, true) +
+                                field('Poe', item.poe_enabled ? '✓ Activé' : '✗ Désactivé')
+                            );
+
+                        } else if (type === 'router') {
+                            const intTotal = item.interfaces_count || 0;
+                            const intUp    = item.interfaces_up_count || 0;
+                            const intPct   = intTotal ? Math.round(intUp/intTotal*100) : 0;
+                            html += `
+                                <div style="border-radius:10px;overflow:hidden;border:1px solid #67e8f930;">
+                                    <div style="background:#ecfeff;padding:12px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #67e8f930;">
+                                        <i class="fas fa-ethernet" style="color:#0891b2;"></i>
+                                        <span style="font-weight:700;color:#0891b2;font-size:.9rem;">Interfaces</span>
+                                    </div>
+                                    <div style="padding:14px;background:white;">
+                                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px;">
+                                            <div style="text-align:center;padding:12px;background:#ecfeff;border-radius:8px;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#0891b2;">${intTotal}</div>
+                                                <div style="font-size:.72rem;color:#164e63;font-weight:600;">Total</div>
+                                            </div>
+                                            <div style="text-align:center;padding:12px;background:#ecfdf5;border-radius:8px;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#059669;">${intUp}</div>
+                                                <div style="font-size:.72rem;color:#065f46;font-weight:600;">UP</div>
+                                            </div>
+                                            <div style="text-align:center;padding:12px;background:#fef2f2;border-radius:8px;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#dc2626;">${intTotal - intUp}</div>
+                                                <div style="font-size:.72rem;color:#991b1b;font-weight:600;">DOWN</div>
+                                            </div>
+                                            <div style="text-align:center;padding:12px;background:#fafafa;border-radius:8px;">
+                                                <div style="font-size:.85rem;font-weight:700;color:#374151;">${intPct}%</div>
+                                                <div style="font-size:.72rem;color:#6b7280;font-weight:600;">Dispo.</div>
+                                            </div>
+                                        </div>
+                                        <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+                                            <span style="font-size:.8rem;color:#6b7280;">Interfaces actives</span>
+                                            <span style="font-size:.8rem;font-weight:700;color:${intPct > 50 ? '#059669' : '#dc2626'};">${intPct}%</span>
+                                        </div>
+                                        <div style="background:#e2e8f0;border-radius:99px;height:8px;overflow:hidden;">
+                                            <div style="height:100%;border-radius:99px;background:${intPct > 50 ? '#059669' : '#dc2626'};width:${intPct}%;transition:width .4s;"></div>
+                                        </div>
+                                    </div>
+                                </div>`;
+
+                            html += section('Équipement', 'fa-microchip', '#7c3aed', '#f5f3ff',
+                                field('Firmware', item.firmware_version) +
+                                field('N° série', item.serial_number, true) +
+                                field('Asset tag', item.asset_tag, true) +
+                                field('Type routage', item.routing_protocol || 'N/A')
+                            );
+
+                        } else if (type === 'firewall') {
+                            const policies = item.security_policies_count || 0;
+                            const cpu      = item.cpu    || 0;
+                            const mem      = item.memory || 0;
+                            const cpuColor = cpu > 85 ? '#dc2626' : cpu > 65 ? '#f59e0b' : '#059669';
+                            const memColor = mem > 85 ? '#dc2626' : mem > 65 ? '#f59e0b' : '#059669';
+                            html += `
+                                <div style="border-radius:10px;overflow:hidden;border:1px solid #fca5a530;">
+                                    <div style="background:#fef2f2;padding:12px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #fca5a530;">
+                                        <i class="fas fa-shield-alt" style="color:#dc2626;"></i>
+                                        <span style="font-weight:700;color:#dc2626;font-size:.9rem;">Sécurité & Performance</span>
+                                    </div>
+                                    <div style="padding:14px;background:white;">
+                                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px;">
+                                            <div style="text-align:center;padding:12px;background:#fef2f2;border-radius:8px;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#dc2626;">${policies}</div>
+                                                <div style="font-size:.72rem;color:#991b1b;font-weight:600;">Règles</div>
+                                            </div>
+                                            <div style="text-align:center;padding:12px;background:#f0fdf4;border-radius:8px;">
+                                                <div style="font-size:1.2rem;font-weight:800;color:${cpuColor};">${cpu}%</div>
+                                                <div style="font-size:.72rem;color:#374151;font-weight:600;">CPU</div>
+                                            </div>
+                                            <div style="text-align:center;padding:12px;background:#eff6ff;border-radius:8px;">
+                                                <div style="font-size:1.2rem;font-weight:800;color:${memColor};">${mem}%</div>
+                                                <div style="font-size:.72rem;color:#374151;font-weight:600;">RAM</div>
+                                            </div>
+                                            <div style="text-align:center;padding:12px;background:#fafafa;border-radius:8px;">
+                                                <div style="font-size:.8rem;font-weight:700;color:#374151;">${item.firewall_type||'N/A'}</div>
+                                                <div style="font-size:.72rem;color:#6b7280;font-weight:600;">Type</div>
+                                            </div>
+                                        </div>
+                                        <div style="display:grid;gap:8px;">
+                                            <div>
+                                                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                                                    <span style="font-size:.78rem;color:#6b7280;">CPU</span>
+                                                    <span style="font-size:.78rem;font-weight:700;color:${cpuColor};">${cpu}%</span>
+                                                </div>
+                                                <div style="background:#e2e8f0;border-radius:99px;height:6px;overflow:hidden;">
+                                                    <div style="height:100%;border-radius:99px;background:${cpuColor};width:${Math.min(cpu,100)}%;"></div>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                                                    <span style="font-size:.78rem;color:#6b7280;">RAM</span>
+                                                    <span style="font-size:.78rem;font-weight:700;color:${memColor};">${mem}%</span>
+                                                </div>
+                                                <div style="background:#e2e8f0;border-radius:99px;height:6px;overflow:hidden;">
+                                                    <div style="height:100%;border-radius:99px;background:${memColor};width:${Math.min(mem,100)}%;"></div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>`;
 
-                            // Derniers accès
-                            if (item.access_logs?.length) {
-                                html += `
-                                    <div style="background:#e0f2fe;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--info-color)">
-                                        <h4 style="color:#0369a1;margin-bottom:16px"><i class="fas fa-history"></i> Derniers accès</h4>
-                                        <div style="display:grid;gap:10px">
+                            html += section('Équipement', 'fa-microchip', '#7c3aed', '#f5f3ff',
+                                field('Type firewall', item.firewall_type) +
+                                field('Firmware', item.firmware_version) +
+                                field('N° série', item.serial_number, true) +
+                                field('HA', item.high_availability ? '✓ Actif' : '✗ Inactif') +
+                                field('Dernier backup', item.last_backup ? new Date(item.last_backup).toLocaleDateString('fr-FR') : 'Jamais') +
+                                field('Asset tag', item.asset_tag, true)
+                            );
+                        }
+
+                        // ── Credentials (tous équipements) ──────────────────────
+                        html += section('Identifiants d\'accès', 'fa-key', '#d97706', '#fffbeb',
+                            field('Utilisateur', item.username, true) +
+                            field('Mot de passe', '•'.repeat(12) + '<span style="font-size:.7rem;color:#9ca3af"> (masqué)</span>') +
+                            field('Firmware', item.firmware_version) +
+                            field('N° série', item.serial_number, true)
+                        );
+
+                        // ── Notes ────────────────────────────────────────────────
+                        if (item.notes) {
+                            html += `
+                                <div style="border-radius:10px;overflow:hidden;border:1px solid #e5e7eb;">
+                                    <div style="background:#f9fafb;padding:10px 14px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:8px;">
+                                        <i class="fas fa-sticky-note" style="color:#6b7280;"></i>
+                                        <span style="font-weight:700;color:#374151;font-size:.85rem;">Notes</span>
+                                    </div>
+                                    <div style="padding:14px;background:white;font-size:.88rem;color:#374151;line-height:1.6;white-space:pre-wrap;">${item.notes}</div>
+                                </div>`;
+                        }
+
+                        // ── Derniers accès ───────────────────────────────────────
+                        if (item.access_logs?.length) {
+                            html += `
+                                <div style="border-radius:10px;overflow:hidden;border:1px solid #bfdbfe30;">
+                                    <div style="background:#eff6ff;padding:12px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #bfdbfe;">
+                                        <i class="fas fa-history" style="color:#2563eb;"></i>
+                                        <span style="font-weight:700;color:#1e40af;font-size:.9rem;">Derniers accès</span>
+                                    </div>
+                                    <div style="padding:14px;background:white;display:grid;gap:8px;">
                                         ${item.access_logs.slice(0,5).map(log => `
-                                            <div style="background:white;padding:12px;border-radius:8px;display:flex;justify-content:space-between;align-items:center">
-                                                <div style="display:flex;align-items:center;gap:12px">
-                                                    <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--primary-color),var(--accent-color));display:flex;align-items:center;justify-content:center;color:white;font-weight:700">
+                                            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#f8fafc;border-radius:8px;border:1px solid #e5e7eb;">
+                                                <div style="display:flex;align-items:center;gap:10px;">
+                                                    <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--primary-color),var(--accent-color));display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:.8rem;flex-shrink:0;">
                                                         ${(log.user?.name || 'U').charAt(0).toUpperCase()}
                                                     </div>
                                                     <div>
-                                                        <div style="font-weight:600">${log.user?.name || log.ip_address || 'Inconnu'}</div>
-                                                        <div style="font-size:.8rem;color:var(--text-light)">
-                                                            <i class="fas fa-desktop"></i> ${log.ip_address || ''}
-                                                            ${log.action ? `• ${log.action}` : ''}
+                                                        <div style="font-weight:600;font-size:.85rem;">${log.user?.name || 'Inconnu'}</div>
+                                                        <div style="font-size:.75rem;color:#6b7280;">
+                                                            <code style="background:#f3f4f6;padding:1px 4px;border-radius:3px;">${log.ip_address || ''}</code>
+                                                            ${log.action ? `<span style="margin-left:4px;padding:1px 6px;background:#e0f2fe;border-radius:99px;color:#0369a1;">${log.action}</span>` : ''}
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <div style="font-size:.8rem;color:var(--text-light)">${this.formatDate(log.created_at)}</div>
+                                                <div style="font-size:.75rem;color:#9ca3af;white-space:nowrap;margin-left:8px;">${this.formatDate(log.created_at)}</div>
                                             </div>`).join('')}
-                                        </div>
-                                        ${item.access_logs.length > 5 ? `<div style="text-align:center;margin-top:12px;color:var(--text-light);font-size:.85rem">... et ${item.access_logs.length - 5} accès supplémentaires</div>` : ''}
-                                    </div>`;
-                            } else {
-                                html += `
-                                    <div style="background:#f8fafc;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--text-light)">
-                                        <h4 style="color:var(--text-light);margin-bottom:12px"><i class="fas fa-history"></i> Derniers accès</h4>
-                                        <p style="color:var(--text-light);text-align:center;padding:20px"><i class="fas fa-info-circle"></i> Aucun accès enregistré</p>
-                                    </div>`;
-                            }
+                                        ${item.access_logs.length > 5 ? `<div style="text-align:center;font-size:.8rem;color:#9ca3af;padding:4px;">+${item.access_logs.length - 5} accès supplémentaires</div>` : ''}
+                                    </div>
+                                </div>`;
+                        } else {
+                            html += `
+                                <div style="padding:20px;text-align:center;color:#9ca3af;background:#f9fafb;border-radius:10px;border:1px dashed #e5e7eb;">
+                                    <i class="fas fa-history" style="display:block;margin-bottom:8px;opacity:.4;font-size:1.5rem;"></i>
+                                    <span style="font-size:.85rem;">Aucun accès enregistré</span>
+                                </div>`;
                         }
 
                         html += '</div>';
                         return html;
                     },
-    // Ces ajouts doivent être fusionnés dans la définition de dashboardApp() existante.
-    // Voici les nouvelles propriétés et méthodes à intégrer :
             modalSiteEquipmentList: [],
             modalSiteEquipmentType: null,
             modalSiteEquipmentTitle: '',
+            userToToggle: null,
+            deleteTarget: null,
 
             showSiteEquipment(siteId, type) {
                 const site = this.sites.find(s => s.id === siteId);
@@ -1316,8 +1628,9 @@
                 this.showModal('createEquipmentModal');
             },
 
-            async toggleUserStatus(user) {
-                if (!confirm(`Changer le statut de ${user.name} ?`)) return;
+            async confirmToggleUserStatus() {
+                if (!this.userToToggle) return;
+                const user = this.userToToggle;
                 const result = await this.apiRequest(`/api/users/${user.id}/toggle-status`, 'PATCH');
                 if (result.success) {
                     const idx = this.users.findIndex(u => u.id === user.id);
@@ -1327,8 +1640,9 @@
                     }
                     this.showToast(result.message, 'success');
                 }
+                this.closeModal('toggleUserStatusModal');
+                this.userToToggle = null;
             },
-
             // Pour le switch
             uploadPortConfig() {
                 const fileInput = document.getElementById('portConfigFile');
@@ -1385,4 +1699,3 @@
     </script>
 </body>
 </html>
-

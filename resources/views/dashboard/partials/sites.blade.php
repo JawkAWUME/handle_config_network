@@ -1,26 +1,40 @@
 <div class="fade-in">
+
+    {{-- ── Filtres ─────────────────────────────────────────────────── --}}
     <div class="filters-section">
         <div class="search-box">
             <i class="fas fa-search"></i>
-            <input type="text" x-model="filters.sites.search" @input.debounce="filterSites" placeholder="Rechercher un site...">
+            {{--
+                CORRECTION : @input.debounce="filterSites" supprimé.
+                filteredSites est un computed getter Alpine → le filtre se met à jour
+                automatiquement via x-model, aucune méthode impérative n'est nécessaire.
+            --}}
+            <input type="text"
+                   x-model="filters.sites.search"
+                   placeholder="Rechercher un site..."  autocomplete="off">
         </div>
     </div>
 
+    {{-- ── Section table ───────────────────────────────────────────── --}}
     <section class="equipment-section">
         <div class="section-header">
             <h2 class="section-title">
                 <i class="fas fa-building"></i> Gestion des sites
             </h2>
             <div class="section-actions">
-                <span class="status-badge status-info" x-text="sites.length + ' site(s)'"></span>
+                {{-- Utiliser filteredSites.length pour refléter la recherche en cours --}}
+                <span class="status-badge status-info"
+                      x-text="filteredSites.length + ' site(s)'"></span>
+
                 @can('create', App\Models\Site::class)
                 <button class="btn btn-primary" @click="openCreateModal('site')">
                     <i class="fas fa-plus"></i> Nouveau site
                 </button>
                 @endcan
-                <a href="{{ route('sites.export') }}" class="btn btn-outline">
+
+                <!-- <a href="{{ route('sites.export') }}" class="btn btn-outline">
                     <i class="fas fa-download"></i> Exporter
-                </a>
+                </a> -->
             </div>
         </div>
 
@@ -40,66 +54,85 @@
                         <tr>
                             <td>
                                 <strong x-text="site.name"></strong><br>
-                                <small class="text-muted" x-text="site.city"></small>
+                                <small class="text-muted" x-text="site.code || site.city || ''"></small>
                             </td>
                             <td>
                                 <div x-text="site.address || 'N/A'"></div>
                                 <small class="text-muted">
                                     <span x-text="site.postal_code || ''"></span>
+                                    <span x-show="site.postal_code && site.city"> </span>
                                     <span x-text="site.city || ''"></span>
                                     <span x-show="site.country" x-text="', ' + site.country"></span>
                                 </small>
                             </td>
                             <td>
                                 <div style="display: flex; gap: 12px; font-size: 0.85rem;">
-                                    {{-- Badge Firewalls cliquable --}}
-                                    <span class="status-badge status-danger" style="font-size: 0.75rem; cursor: pointer;" 
+                                    <span class="status-badge status-danger"
+                                          style="font-size: 0.75rem; cursor: pointer;"
+                                          title="Voir les firewalls"
                                           @click="showSiteEquipment(site.id, 'firewall')">
-                                        <i class="fas fa-fire"></i> <span x-text="(site.firewalls_count || 0)"></span>
+                                        <i class="fas fa-fire"></i>
+                                        <span x-text="site.firewalls_count || 0"></span>
                                     </span>
-                                    {{-- Badge Routeurs cliquable --}}
-                                    <span class="status-badge status-info" style="font-size: 0.75rem; cursor: pointer;" 
+                                    <span class="status-badge status-info"
+                                          style="font-size: 0.75rem; cursor: pointer;"
+                                          title="Voir les routeurs"
                                           @click="showSiteEquipment(site.id, 'router')">
-                                        <i class="fas fa-route"></i> <span x-text="(site.routers_count || 0)"></span>
+                                        <i class="fas fa-route"></i>
+                                        <span x-text="site.routers_count || 0"></span>
                                     </span>
-                                    {{-- Badge Switchs cliquable --}}
-                                    <span class="status-badge status-active" style="font-size: 0.75rem; cursor: pointer;" 
+                                    <span class="status-badge status-active"
+                                          style="font-size: 0.75rem; cursor: pointer;"
+                                          title="Voir les switchs"
                                           @click="showSiteEquipment(site.id, 'switch')">
-                                        <i class="fas fa-exchange-alt"></i> <span x-text="(site.switches_count || 0)"></span>
+                                        <i class="fas fa-exchange-alt"></i>
+                                        <span x-text="site.switches_count || 0"></span>
                                     </span>
                                 </div>
                             </td>
                             <td>
+                                {{--
+                                    Les clés contact_name / contact_email / contact_phone sont celles
+                                    exposées par sitesForJs dans DashboardController
+                                    (mappées depuis technical_contact / technical_email / phone).
+                                --}}
                                 <div style="font-size: 0.85rem;">
                                     <div x-show="site.contact_name">
-                                        <i class="fas fa-user" style="width: 14px;"></i>
+                                        <i class="fas fa-user" style="width: 14px; color: var(--primary-color);"></i>
                                         <span x-text="site.contact_name"></span>
                                     </div>
                                     <div x-show="site.contact_email">
-                                        <i class="fas fa-envelope" style="width: 14px;"></i>
+                                        <i class="fas fa-envelope" style="width: 14px; color: var(--primary-color);"></i>
                                         <span x-text="site.contact_email"></span>
                                     </div>
                                     <div x-show="site.contact_phone">
-                                        <i class="fas fa-phone" style="width: 14px;"></i>
+                                        <i class="fas fa-phone" style="width: 14px; color: var(--primary-color);"></i>
                                         <span x-text="site.contact_phone"></span>
                                     </div>
-                                    <div x-show="!site.contact_name && !site.contact_email && !site.contact_phone" style="color: var(--text-light);">
-                                        Aucun contact
+                                    <div x-show="!site.contact_name && !site.contact_email && !site.contact_phone"
+                                         style="color: var(--text-light);">
+                                        <i class="fas fa-minus" style="font-size: 0.7rem;"></i> Aucun contact
                                     </div>
                                 </div>
                             </td>
                             <td>
                                 <div class="action-buttons">
-                                    <button class="btn btn-outline btn-sm btn-icon" title="Voir" @click="viewItem('sites', site.id)">
+                                    <button class="btn btn-outline btn-sm btn-icon"
+                                            title="Voir les détails"
+                                            @click="viewItem('sites', site.id)">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                     @can('updateAny', App\Models\Site::class)
-                                    <button class="btn btn-outline btn-sm btn-icon" title="Modifier" @click="editItem('sites', site.id)">
+                                    <button class="btn btn-outline btn-sm btn-icon"
+                                            title="Modifier"
+                                            @click="editItem('sites', site.id)">
                                         <i class="fas fa-edit"></i>
                                     </button>
                                     @endcan
                                     @can('deleteAny', App\Models\Site::class)
-                                    <button class="btn btn-outline btn-sm btn-icon" title="Supprimer" @click="deleteItem('sites', site.id)">
+                                    <button class="btn btn-outline btn-sm btn-icon"
+                                            title="Supprimer"
+                                            @click="deleteItem('sites', site.id)">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                     @endcan
@@ -107,20 +140,24 @@
                             </td>
                         </tr>
                     </template>
+
                     <tr x-show="filteredSites.length === 0">
-                        <td colspan="5" class="text-center py-5">
-                            <i class="fas fa-building fa-3x text-muted mb-3"></i>
-                            <p class="text-muted">Aucun site trouvé</p>
+                        <td colspan="5"
+                            style="padding: 40px; text-align: center; color: var(--text-light);">
+                            <i class="fas fa-building fa-3x"
+                               style="opacity: .3; display: block; margin-bottom: 12px;"></i>
+                            Aucun site trouvé
                         </td>
                     </tr>
                 </tbody>
             </table>
         </div>
     </section>
+
 </div>
 
 {{-- ════════════════════════════════════════════════════════════
-     MODAL : Création / Édition d'un Site (inchangé)
+     MODAL : Création / Édition d'un Site
      ════════════════════════════════════════════════════════════ --}}
 <div id="createEquipmentModal"
      x-show="currentModal === 'create' && modalData.type === 'site'"
@@ -190,7 +227,8 @@
                         <label style="font-size:.85rem; color:var(--text-light); display:block; margin-bottom:6px; font-weight:600;">
                             Description
                         </label>
-                        <textarea x-model="formData.description" rows="3" placeholder="Description du site..."
+                        <textarea x-model="formData.description" rows="3"
+                                  placeholder="Description du site..."
                                   style="width:100%; padding:10px 14px; border:2px solid var(--border-color);
                                          border-radius:var(--border-radius); font-family:var(--font-secondary);
                                          font-size:.95rem; resize:vertical; transition:var(--transition);"
@@ -213,7 +251,8 @@
                         <label style="font-size:.85rem; color:var(--text-light); display:block; margin-bottom:6px; font-weight:600;">
                             Adresse
                         </label>
-                        <input x-model="formData.address" type="text" placeholder="ex. 123 Avenue des Champs-Élysées"
+                        <input x-model="formData.address" type="text"
+                               placeholder="ex. 123 Avenue des Champs-Élysées"
                                style="width:100%; padding:10px 14px; border:2px solid var(--border-color);
                                       border-radius:var(--border-radius); font-family:var(--font-secondary);
                                       font-size:.95rem; transition:var(--transition);"
@@ -285,7 +324,8 @@
                         <label style="font-size:.85rem; color:var(--text-light); display:block; margin-bottom:6px; font-weight:600;">
                             Latitude
                         </label>
-                        <input x-model="formData.latitude" type="number" step="0.000001" placeholder="ex. 48.8566"
+                        <input x-model="formData.latitude" type="number" step="0.000001"
+                               placeholder="ex. 48.8566"
                                style="width:100%; padding:10px 14px; border:2px solid var(--border-color);
                                       border-radius:var(--border-radius); font-family:monospace;
                                       font-size:.95rem; transition:var(--transition);"
@@ -297,7 +337,8 @@
                         <label style="font-size:.85rem; color:var(--text-light); display:block; margin-bottom:6px; font-weight:600;">
                             Longitude
                         </label>
-                        <input x-model="formData.longitude" type="number" step="0.000001" placeholder="ex. 2.3522"
+                        <input x-model="formData.longitude" type="number" step="0.000001"
+                               placeholder="ex. 2.3522"
                                style="width:100%; padding:10px 14px; border:2px solid var(--border-color);
                                       border-radius:var(--border-radius); font-family:monospace;
                                       font-size:.95rem; transition:var(--transition);"
@@ -309,6 +350,10 @@
             </div>
 
             {{-- 4. Informations de contact --}}
+            {{--
+                Les champs sont bindés sur contact_name / contact_email / contact_phone
+                qui correspondent aux clés de formData (getEmptyForm + editItem).
+            --}}
             <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
                         padding: 20px; border-radius: var(--border-radius);
                         border-left: 4px solid var(--warning-color);">
@@ -321,7 +366,8 @@
                         <label style="font-size:.85rem; color:#92400e; display:block; margin-bottom:6px; font-weight:600;">
                             <i class="fas fa-user"></i> Nom du contact
                         </label>
-                        <input x-model="formData.contact_name" type="text" placeholder="ex. Jean Dupont"
+                        <input x-model="formData.contact_name" type="text"
+                               placeholder="ex. Jean Dupont"
                                style="width:100%; padding:10px 14px; border:2px solid #f59e0b;
                                       border-radius:var(--border-radius); background:white;
                                       font-family:var(--font-secondary); font-size:.95rem; transition:var(--transition);"
@@ -333,7 +379,8 @@
                         <label style="font-size:.85rem; color:#92400e; display:block; margin-bottom:6px; font-weight:600;">
                             <i class="fas fa-envelope"></i> Email
                         </label>
-                        <input x-model="formData.contact_email" type="email" placeholder="ex. contact@site.fr"
+                        <input x-model="formData.contact_email" type="email"
+                               placeholder="ex. contact@site.fr"
                                style="width:100%; padding:10px 14px; border:2px solid #f59e0b;
                                       border-radius:var(--border-radius); background:white;
                                       font-family:monospace; font-size:.95rem; transition:var(--transition);"
@@ -345,7 +392,8 @@
                         <label style="font-size:.85rem; color:#92400e; display:block; margin-bottom:6px; font-weight:600;">
                             <i class="fas fa-phone"></i> Téléphone
                         </label>
-                        <input x-model="formData.contact_phone" type="tel" placeholder="ex. +33 1 23 45 67 89"
+                        <input x-model="formData.contact_phone" type="tel"
+                               placeholder="ex. +33 1 23 45 67 89"
                                style="width:100%; padding:10px 14px; border:2px solid #f59e0b;
                                       border-radius:var(--border-radius); background:white;
                                       font-family:monospace; font-size:.95rem; transition:var(--transition);"
@@ -392,7 +440,7 @@
 </div>
 
 {{-- ════════════════════════════════════════════════════════════
-     MODAL : Liste des équipements d'un site (nouveau)
+     MODAL : Liste des équipements d'un site
      ════════════════════════════════════════════════════════════ --}}
 <div id="viewSiteEquipmentModal"
      x-show="currentModal === 'siteEquipment'"
@@ -413,9 +461,9 @@
                     border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;">
             <h3 style="margin: 0; font-size: 1.5rem; display: flex; align-items: center; gap: 12px;">
                 <i class="fas" :class="{
-                    'fa-fire': modalSiteEquipmentType === 'firewall',
-                    'fa-route': modalSiteEquipmentType === 'router',
-                    'fa-exchange-alt': modalSiteEquipmentType === 'switch'
+                    'fa-fire':        modalSiteEquipmentType === 'firewall',
+                    'fa-route':       modalSiteEquipmentType === 'router',
+                    'fa-exchange-alt':modalSiteEquipmentType === 'switch'
                 }"></i>
                 <span x-text="modalSiteEquipmentTitle"></span>
             </h3>
@@ -439,16 +487,17 @@
             </template>
             <template x-for="eq in modalSiteEquipmentList" :key="eq.id">
                 <div style="display: flex; align-items: center; justify-content: space-between;
-                            padding: 16px; border: 1px solid var(--border-color); border-radius: var(--border-radius);
-                            margin-bottom: 12px; background: white; transition: var(--transition);"
-                     @mouseenter="$el.style.borderColor = 'var(--primary-color)'; $el.style.boxShadow = 'var(--card-shadow)'"
-                     @mouseleave="$el.style.borderColor = 'var(--border-color)'; $el.style.boxShadow = 'none'">
+                            padding: 16px; border: 1px solid var(--border-color);
+                            border-radius: var(--border-radius); margin-bottom: 12px;
+                            background: white; transition: var(--transition);"
+                     @mouseenter="$el.style.borderColor='var(--primary-color)'; $el.style.boxShadow='var(--card-shadow)'"
+                     @mouseleave="$el.style.borderColor='var(--border-color)'; $el.style.boxShadow='none'">
                     <div style="display: flex; align-items: center; gap: 16px;">
                         <div style="font-size: 2rem; color: var(--primary-color);">
                             <i class="fas" :class="{
-                                'fa-fire': modalSiteEquipmentType === 'firewall',
-                                'fa-route': modalSiteEquipmentType === 'router',
-                                'fa-exchange-alt': modalSiteEquipmentType === 'switch'
+                                'fa-fire':        modalSiteEquipmentType === 'firewall',
+                                'fa-route':       modalSiteEquipmentType === 'router',
+                                'fa-exchange-alt':modalSiteEquipmentType === 'switch'
                             }"></i>
                         </div>
                         <div>
@@ -459,15 +508,18 @@
                             </div>
                             <div style="font-size: 0.8rem; margin-top: 4px;">
                                 <span class="status-badge" :class="{
-                                    'status-active': eq.status === 'active',
+                                    'status-active':  eq.status === 'active',
                                     'status-warning': eq.status === 'warning',
-                                    'status-danger': eq.status === 'danger'
-                                }" x-text="eq.status === 'active' ? 'Actif' : (eq.status === 'warning' ? 'Avertissement' : 'Critique')"></span>
+                                    'status-danger':  eq.status === 'danger'
+                                }"
+                                x-text="eq.status === 'active' ? 'Actif' : (eq.status === 'warning' ? 'Avertissement' : 'Inactif')">
+                                </span>
                             </div>
                         </div>
                     </div>
                     <div>
-                        <button class="btn btn-outline btn-sm btn-icon" title="Voir détails"
+                        <button class="btn btn-outline btn-sm btn-icon"
+                                title="Voir détails"
                                 @click="viewItem(modalSiteEquipmentType + 's', eq.id); closeModal('viewSiteEquipmentModal')">
                             <i class="fas fa-eye"></i>
                         </button>
@@ -478,8 +530,7 @@
 
         {{-- Footer --}}
         <div style="padding: 20px 24px; border-top: 2px solid var(--border-color);
-                    display: flex; justify-content: flex-end; gap: 12px;
-                    background: #f8fafc;
+                    display: flex; justify-content: flex-end; gap: 12px; background: #f8fafc;
                     border-radius: 0 0 var(--border-radius-lg) var(--border-radius-lg);">
             <button class="btn btn-outline" @click="closeModal('viewSiteEquipmentModal')">
                 <i class="fas fa-times"></i> Fermer
@@ -488,5 +539,3 @@
 
     </div>
 </div>
-
-{{-- Ajout des propriétés et méthodes nécessaires dans l'objet Alpine --}}

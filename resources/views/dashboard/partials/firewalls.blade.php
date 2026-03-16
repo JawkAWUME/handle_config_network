@@ -48,9 +48,9 @@
                 </button>
                 @endcan
 
-                <a href="{{ route('firewalls.export') }}" class="btn btn-outline">
+                <!-- <a href="{{ route('firewalls.export') }}" class="btn btn-outline">
                     <i class="fas fa-download"></i> Exporter
-                </a>
+                </a> -->
             </div>
         </div>
 
@@ -107,17 +107,29 @@
 
                             <td>
                                 <div class="action-buttons">
-                                    {{-- viewItem() → ouvre equipmentDetailsModal --}}
+                                    {{-- Voir --}}
                                     <button class="btn btn-outline btn-sm btn-icon"
-                                            title="Voir"
+                                            title="Voir le détail"
                                             @click="viewItem('firewalls', fw.id)">
                                         <i class="fas fa-eye"></i>
                                     </button>
+                                    {{-- Modifier --}}
+                                    @can('create', App\Models\Firewall::class)
+                                    <button class="btn btn-outline btn-sm btn-icon"
+                                            title="Modifier"
+                                            @click="editItem('firewalls', fw.id)">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    @endcan
+                                    {{-- Politiques de sécurité --}}
+                                    @can('create', App\Models\Firewall::class)
                                     <button class="btn btn-outline btn-sm btn-icon"
                                             title="Politiques de sécurité"
                                             @click="updateSecurityPolicies(fw.id)">
                                         <i class="fas fa-shield-alt"></i>
                                     </button>
+                                    @endcan
+                                    {{-- Supprimer --}}
                                     @can('delete', App\Models\Firewall::class)
                                     <button class="btn btn-outline btn-sm btn-icon"
                                             title="Supprimer"

@@ -23,12 +23,17 @@ class Router extends Model
         'brand',
         'model',
         'interfaces',
+        'interfaces_count',
+        'interfaces_up_count',
         'routing_protocols',
         'management_ip',
+        'ip_nms',
+        'ip_service',
         'vlan_nms',
         'vlan_service',
         'username',
         'password',
+        'enable_password',
         'configuration',
         'configuration_file',
         'operating_system',
@@ -36,7 +41,7 @@ class Router extends Model
         'asset_tag',
         'status',
         'last_backup',
-        'notes'
+        'notes',
     ];
 
     /**
@@ -56,7 +61,8 @@ class Router extends Model
      */
     protected $hidden = [
         'password',
-        'configuration'
+        'enable_password',
+        'configuration',
     ];
 
     /**
@@ -151,7 +157,7 @@ class Router extends Model
             return [];
         }
 
-        $interfaces = json_decode($this->interfaces, true);
+        $interfaces = is_array($this->interfaces) ? $this->interfaces : json_decode($this->interfaces, true);
         
         if (!is_array($interfaces)) {
             return [];

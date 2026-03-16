@@ -85,18 +85,48 @@ class SiteController extends Controller
         Gate::authorize('create', Site::class);
 
         $validated = $request->validate([
-            'name'    => 'required|string|max:255',
-            'code'    => 'required|string|max:50|unique:sites,code',
-            'address' => 'nullable|string|max:500',
+            'name'              => 'required|string|max:255',
+            'code'              => 'nullable|string|max:50|unique:sites,code',
+            'address'           => 'nullable|string|max:500',
+            'postal_code'       => 'nullable|string|max:20',
+            'city'              => 'nullable|string|max:255',
+            'country'           => 'nullable|string|max:255',
+            'technical_contact' => 'nullable|string|max:255',
+            'technical_email'   => 'nullable|email|max:255',
+            'phone'             => 'nullable|string|max:50',
+            'description'       => 'nullable|string',
+            'status'            => 'nullable|string|in:active,maintenance,planned',
+            'capacity'          => 'nullable|integer|min:0',
+            'notes'             => 'nullable|string',
+            'switches_ids'      => 'nullable|array',
+            'switches_ids.*'    => 'integer',
+            'routers_ids'       => 'nullable|array',
+            'routers_ids.*'     => 'integer',
+            'firewalls_ids'     => 'nullable|array',
+            'firewalls_ids.*'   => 'integer',
         ]);
 
         try {
             $site = Site::create($validated);
 
+            // Associer les équipements sélectionnés au nouveau site
+            if (!empty($request->switches_ids)) {
+                \App\Models\SwitchModel::whereIn('id', $request->switches_ids)
+                    ->update(['site_id' => $site->id]);
+            }
+            if (!empty($request->routers_ids)) {
+                \App\Models\Router::whereIn('id', $request->routers_ids)
+                    ->update(['site_id' => $site->id]);
+            }
+            if (!empty($request->firewalls_ids)) {
+                \App\Models\Firewall::whereIn('id', $request->firewalls_ids)
+                    ->update(['site_id' => $site->id]);
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Site créé avec succès',
-                'data'    => $site,
+                'data'    => $site->fresh()->loadCount(['switches', 'routers', 'firewalls']),
             ], 201);
 
         } catch (\Exception $e) {
@@ -116,18 +146,63 @@ class SiteController extends Controller
         Gate::authorize('update', $site);
 
         $validated = $request->validate([
-            'name'    => 'sometimes|required|string|max:255',
-            'code'    => 'sometimes|required|string|max:50|unique:sites,code,' . $id,
-            'address' => 'nullable|string|max:500',
+            'name'              => 'sometimes|required|string|max:255',
+            'code'              => 'nullable|string|max:50|unique:sites,code,' . $id,
+            'address'           => 'nullable|string|max:500',
+            'postal_code'       => 'nullable|string|max:20',
+            'city'              => 'nullable|string|max:255',
+            'country'           => 'nullable|string|max:255',
+            'technical_contact' => 'nullable|string|max:255',
+            'technical_email'   => 'nullable|email|max:255',
+            'phone'             => 'nullable|string|max:50',
+            'description'       => 'nullable|string',
+            'status'            => 'nullable|string|in:active,maintenance,planned',
+            'capacity'          => 'nullable|integer|min:0',
+            'notes'             => 'nullable|string',
+            'switches_ids'      => 'nullable|array',
+            'switches_ids.*'    => 'integer',
+            'routers_ids'       => 'nullable|array',
+            'routers_ids.*'     => 'integer',
+            'firewalls_ids'     => 'nullable|array',
+            'firewalls_ids.*'   => 'integer',
         ]);
 
         try {
             $site->update($validated);
 
+            // Mettre à jour les équipements associés
+            if ($request->has('switches_ids')) {
+                \App\Models\SwitchModel::where('site_id', $site->id)
+                    ->whereNotIn('id', $request->switches_ids ?? [])
+                    ->update(['site_id' => null]);
+                if (!empty($request->switches_ids)) {
+                    \App\Models\SwitchModel::whereIn('id', $request->switches_ids)
+                        ->update(['site_id' => $site->id]);
+                }
+            }
+            if ($request->has('routers_ids')) {
+                \App\Models\Router::where('site_id', $site->id)
+                    ->whereNotIn('id', $request->routers_ids ?? [])
+                    ->update(['site_id' => null]);
+                if (!empty($request->routers_ids)) {
+                    \App\Models\Router::whereIn('id', $request->routers_ids)
+                        ->update(['site_id' => $site->id]);
+                }
+            }
+            if ($request->has('firewalls_ids')) {
+                \App\Models\Firewall::where('site_id', $site->id)
+                    ->whereNotIn('id', $request->firewalls_ids ?? [])
+                    ->update(['site_id' => null]);
+                if (!empty($request->firewalls_ids)) {
+                    \App\Models\Firewall::whereIn('id', $request->firewalls_ids)
+                        ->update(['site_id' => $site->id]);
+                }
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Site mis à jour avec succès',
-                'data'    => $site->fresh(),
+                'data'    => $site->fresh()->loadCount(['switches', 'routers', 'firewalls']),
             ]);
 
         } catch (\Exception $e) {

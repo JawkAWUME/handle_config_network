@@ -48,9 +48,9 @@
                 </button>
                 @endcan
 
-                <a href="{{ route('routers.export') }}" class="btn btn-outline">
+                <!-- <a href="{{ route('routers.export') }}" class="btn btn-outline">
                     <i class="fas fa-download"></i> Exporter
-                </a>
+                </a> -->
             </div>
         </div>
 
@@ -107,12 +107,29 @@
 
                             <td>
                                 <div class="action-buttons">
-                                    {{-- viewItem() → ouvre equipmentDetailsModal --}}
+                                    {{-- Voir --}}
                                     <button class="btn btn-outline btn-sm btn-icon"
-                                            title="Voir"
+                                            title="Voir le détail"
                                             @click="viewItem('routers', rt.id)">
                                         <i class="fas fa-eye"></i>
                                     </button>
+                                    {{-- Modifier --}}
+                                    @can('create', App\Models\Router::class)
+                                    <button class="btn btn-outline btn-sm btn-icon"
+                                            title="Modifier"
+                                            @click="editItem('routers', rt.id)">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    @endcan
+                                    {{-- Configuration --}}
+                                    @can('create', App\Models\Router::class)
+                                    <button class="btn btn-outline btn-sm btn-icon"
+                                            title="Configuration"
+                                            @click="configureRouterConfig(rt.id)">
+                                        <i class="fas fa-cog"></i>
+                                    </button>
+                                    @endcan
+                                    {{-- Supprimer --}}
                                     @can('delete', App\Models\Router::class)
                                     <button class="btn btn-outline btn-sm btn-icon"
                                             title="Supprimer"

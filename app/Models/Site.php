@@ -15,6 +15,7 @@ class Site extends Model
 
     protected $fillable = [
         'name',
+        'code',
         'address',
         'city',
         'country',

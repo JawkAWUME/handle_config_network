@@ -53,7 +53,10 @@ class Firewall extends Model
         'ha_peer_id',
         'monitoring_enabled',
         'last_backup',
-        'notes'
+        'security_policies_count',
+        'cpu',
+        'memory',
+        'notes',
     ];
 
     /**
@@ -153,7 +156,7 @@ class Firewall extends Model
     /**
      * Accesseur pour le type de firewall formaté
      */
-    public function getFirewallTypeFormattedAttribute()
+    public function getFirewallTypes() : array
     {
         $types = [
             self::TYPE_PALO_ALTO => 'Palo Alto',
@@ -193,7 +196,7 @@ class Firewall extends Model
             return [];
         }
 
-        $policies = json_decode($this->security_policies, true);
+        $policies = is_array($this->security_policies) ? $this->security_policies : json_decode($this->security_policies, true);
         
         return array_map(function($policy) {
             return [
@@ -219,7 +222,7 @@ class Firewall extends Model
             return [];
         }
 
-        $rules = json_decode($this->nat_rules, true);
+        $rules = is_array($this->nat_rules) ? $this->nat_rules : json_decode($this->nat_rules, true);
         
         return array_map(function($rule) {
             return [
@@ -267,7 +270,7 @@ class Firewall extends Model
             return ['status' => 'warning', 'message' => 'Aucune licence configurée'];
         }
 
-        $licenses = json_decode($this->licenses, true);
+        $licenses = is_array($this->licenses) ? $this->licenses : json_decode($this->licenses, true);
         $expired = 0;
         $expiring = 0;
         $valid = 0;

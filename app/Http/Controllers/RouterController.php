@@ -5,8 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Router;
 use App\Services\RouterService;
 use App\Exports\RouterExport;
-use App\Http\Requests\Router\StoreRouterRequest;
-use App\Http\Requests\Router\UpdateRouterRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Maatwebsite\Excel\Facades\Excel;
@@ -60,10 +58,7 @@ class RouterController extends Controller
             $limit = $request->input('limit', 10);
 
             $query = Router::query()
-                ->with(['site:id,name'])
-                ->withCount(['interfaces', 'interfaces as interfaces_up_count' => function ($q) {
-                    $q->where('status', 'up');
-                }]);
+                ->with(['site:id,name']);
 
             if ($search) {
                 $query->where(function ($q) use ($search) {
@@ -90,24 +85,7 @@ class RouterController extends Controller
 
             $routers = $query->orderBy('name')->limit($limit)->get();
             
-            $formattedRouters = $routers->map(function ($router) {
-                return [
-                    'id' => $router->id,
-                    'name' => $router->name,
-                    'model' => $router->model,
-                    'site' => $router->site ? [
-                        'id' => $router->site->id,
-                        'name' => $router->site->name
-                    ] : null,
-                    'brand' => $router->brand,
-                    'management_ip' => $router->management_ip,
-                    'status' => $router->status,
-                    'interfaces_count' => $router->interfaces_count,
-                    'interfaces_up_count' => $router->interfaces_up_count,
-                    'created_at' => $router->created_at->format('Y-m-d H:i:s'),
-                    'updated_at' => $router->updated_at->format('Y-m-d H:i:s'),
-                ];
-            });
+            $formattedRouters = $routers->map(fn($router) => $this->formatRouter($router));
 
             return response()->json([
                 'success' => true,
@@ -253,18 +231,47 @@ class RouterController extends Controller
     /**
      * Créer un routeur (JSON)
      */
-    public function store(StoreRouterRequest $request)
+    public function store(Request $request)
     {
+        Gate::authorize('create', Router::class);
+
+        $validated = $request->validate([
+            'name'                 => 'required|string|max:255',
+            'site_id'              => 'nullable|integer|exists:sites,id',
+            'brand'                => 'nullable|string|max:100',
+            'model'                => 'nullable|string|max:100',
+            'management_ip'        => 'nullable|string|max:45',
+            'ip_nms'               => 'nullable|string|max:45',
+            'ip_service'           => 'nullable|string|max:45',
+            'vlan_nms'             => 'nullable|integer|min:1|max:4094',
+            'vlan_service'         => 'nullable|integer|min:1|max:4094',
+            'operating_system'     => 'nullable|string|max:100',
+            'serial_number'        => 'nullable|string|max:100',
+            'asset_tag'            => 'nullable|string|max:100',
+            'username'             => 'nullable|string|max:100',
+            'password'             => 'nullable|string|max:255',
+            'enable_password'      => 'nullable|string|max:255',
+            'interfaces_count'     => 'nullable|integer|min:0',
+            'interfaces_up_count'  => 'nullable|integer|min:0',
+            'status'               => 'nullable|string|in:active,warning,danger',
+            'configuration'        => 'nullable|string',
+            'notes'                => 'nullable|string',
+        ]);
+
+        // Convertir statut string → booléen pour la BDD
+        if (isset($validated['status'])) {
+            $validated['status'] = $validated['status'] === 'active';
+        }
+
         try {
-            $router = $this->routerService->createRouter($request->validated());
-            
+            $router = Router::create($validated);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Routeur créé avec succès',
-                'data' => $router,
-                'redirect' => route('routers.show', $router->id)
+                'data'    => $this->formatRouter($router->load('site')),
             ], 201);
-                
+
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -276,17 +283,48 @@ class RouterController extends Controller
     /**
      * Mettre à jour un routeur (JSON)
      */
-    public function update(UpdateRouterRequest $request, $id)
+    public function update(Request $request, $id)
     {
+        $router = Router::findOrFail($id);
+        Gate::authorize('update', $router);
+
+        $validated = $request->validate([
+            'name'                 => 'sometimes|required|string|max:255',
+            'site_id'              => 'nullable|integer|exists:sites,id',
+            'brand'                => 'nullable|string|max:100',
+            'model'                => 'nullable|string|max:100',
+            'management_ip'        => 'nullable|string|max:45',
+            'ip_nms'               => 'nullable|string|max:45',
+            'ip_service'           => 'nullable|string|max:45',
+            'vlan_nms'             => 'nullable|integer|min:1|max:4094',
+            'vlan_service'         => 'nullable|integer|min:1|max:4094',
+            'operating_system'     => 'nullable|string|max:100',
+            'serial_number'        => 'nullable|string|max:100',
+            'asset_tag'            => 'nullable|string|max:100',
+            'username'             => 'nullable|string|max:100',
+            'password'             => 'nullable|string|max:255',
+            'enable_password'      => 'nullable|string|max:255',
+            'interfaces_count'     => 'nullable|integer|min:0',
+            'interfaces_up_count'  => 'nullable|integer|min:0',
+            'status'               => 'nullable|string|in:active,warning,danger',
+            'configuration'        => 'nullable|string',
+            'notes'                => 'nullable|string',
+        ]);
+
+        // Convertir statut string → booléen pour la BDD
+        if (isset($validated['status'])) {
+            $validated['status'] = $validated['status'] === 'active';
+        }
+
         try {
-            $router = $this->routerService->updateRouter($id, $request->validated());
-            
+            $router->update($validated);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Routeur mis à jour avec succès',
-                'data' => $router
+                'data'    => $this->formatRouter($router->fresh()->load('site')),
             ]);
-                
+
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -317,5 +355,35 @@ class RouterController extends Controller
                 'message' => 'Erreur lors de la suppression : ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Formater un routeur pour la réponse JSON (compatible avec le frontend Alpine)
+     */
+    private function formatRouter(Router $rt): array
+    {
+        $toStatus = fn($v) => ($v === true || $v == 1) ? 'active' : 'danger';
+        return [
+            'id'                  => $rt->id,
+            'name'                => $rt->name,
+            'brand'               => $rt->brand,
+            'model'               => $rt->model,
+            'status'              => $toStatus($rt->status),
+            'username'            => $rt->username,
+            'management_ip'       => $rt->management_ip,
+            'ip_nms'              => $rt->ip_nms,
+            'ip_service'          => $rt->ip_service,
+            'vlan_nms'            => $rt->vlan_nms,
+            'vlan_service'        => $rt->vlan_service,
+            'interfaces_count'    => $rt->interfaces_count ?? 0,
+            'interfaces_up_count' => $rt->interfaces_up_count ?? 0,
+            'operating_system'    => $rt->operating_system,
+            'serial_number'       => $rt->serial_number,
+            'asset_tag'           => $rt->asset_tag,
+            'notes'               => $rt->notes,
+            'updated_at'          => $rt->updated_at?->toISOString(),
+            'site'                => $rt->site?->name ?? 'N/A',
+            'site_id'             => $rt->site_id,
+        ];
     }
 }

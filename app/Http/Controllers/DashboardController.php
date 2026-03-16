@@ -243,18 +243,26 @@ class DashboardController extends Controller
 
         // 13. Sites pour Alpine.js
         $sitesForJs = $sites->map(fn($s) => [
-            'id'              => $s->id,
-            'name'            => $s->name,
-            'address'         => $s->address,
-            'postal_code'     => $s->postal_code,
-            'city'            => $s->city,
-            'country'         => $s->country,
-            'contact_name'    => $s->technical_contact,
-            'contact_email'   => $s->technical_email,
-            'contact_phone'   => $s->phone,
-            'switches_count'  => $s->switches_count,
-            'routers_count'   => $s->routers_count,
-            'firewalls_count' => $s->firewalls_count,
+            'id'                => $s->id,
+            'name'              => $s->name,
+            'code'              => $s->code,
+            'description'       => $s->description,
+            'address'           => $s->address,
+            'postal_code'       => $s->postal_code,
+            'city'              => $s->city,
+            'country'           => $s->country,
+            'technical_contact' => $s->technical_contact,
+            'technical_email'   => $s->technical_email,
+            'phone'             => $s->phone,
+            'contact_name'      => $s->technical_contact,
+            'contact_email'     => $s->technical_email,
+            'contact_phone'     => $s->phone,
+            'status'            => $s->status,
+            'capacity'          => $s->capacity,
+            'notes'             => $s->notes,
+            'switches_count'    => $s->switches_count,
+            'routers_count'     => $s->routers_count,
+            'firewalls_count'   => $s->firewalls_count,
         ])->values()->toArray();
 
         // 14. Profil utilisateur connecté
