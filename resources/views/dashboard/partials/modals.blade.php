@@ -66,13 +66,17 @@
                         const list = this.selectedIds[type];
                         const idx  = list.indexOf(id);
                         if (idx === -1) {
-                            list.push(id);
+                            this.selectedIds[type] = [...list, id];
                             this.lastAdded = name;
                             this.lastAddedType = type;
                             setTimeout(() => { this.lastAdded = null; this.lastAddedType = null; }, 2500);
                         } else {
-                            list.splice(idx, 1);
+                            this.selectedIds[type] = list.filter((_, i) => i !== idx);
                         }
+                        /* Synchroniser immédiatement vers formData du parent */
+                        formData.switches_ids  = this.selectedIds.switches;
+                        formData.routers_ids   = this.selectedIds.routers;
+                        formData.firewalls_ids = this.selectedIds.firewalls;
                     },
                     isSelected(type, id) {
                         return this.selectedIds[type].includes(id);
@@ -110,11 +114,6 @@
                     {{-- ─── Référence interne pour init() ─────────────────── --}}
                     <span style="display:none;"
                           x-effect="
-                            if (modalData.id) {
-                                selectedIds.switches  = switches.filter(e => e.site_id === modalData.id).map(e => e.id);
-                                selectedIds.routers   = routers.filter(e => e.site_id === modalData.id).map(e => e.id);
-                                selectedIds.firewalls = firewalls.filter(e => e.site_id === modalData.id).map(e => e.id);
-                            }
                             /* Synchroniser vers formData pour que saveEquipment() du parent puisse les lire */
                             formData.switches_ids  = selectedIds.switches;
                             formData.routers_ids   = selectedIds.routers;
@@ -942,11 +941,126 @@
                 </div>{{-- /x-data site --}}
             </template>
             {{-- ── FIN FORMULAIRE SITE ──────────────────────────────── --}}
+            <template x-if="modalData.type === 'user'">
+                <div style="display:grid;gap:24px;">
 
+                    {{-- 1. Informations personnelles --}}
+                    <div style="background:#f8fafc;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--primary-color);">
+                        <h4 style="color:var(--primary-color);margin:0 0 16px;display:flex;align-items:center;gap:8px;">
+                            <i class="fas fa-user-circle"></i> Informations personnelles
+                        </h4>
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;">
+                            <div>
+                                <label style="font-size:.85rem;color:var(--text-light);display:block;margin-bottom:6px;font-weight:600;">Nom complet <span style="color:var(--danger-color);">*</span></label>
+                                <input x-model="formData.name" type="text" placeholder="ex. Jean Dupont" autocomplete="off"
+                                       style="width:100%;padding:10px 14px;border:2px solid var(--border-color);border-radius:var(--border-radius);font-size:.95rem;"
+                                       onfocus="this.style.borderColor='var(--primary-color)'" onblur="this.style.borderColor='var(--border-color)'">
+                            </div>
+                            <div>
+                                <label style="font-size:.85rem;color:var(--text-light);display:block;margin-bottom:6px;font-weight:600;">Adresse email <span style="color:var(--danger-color);">*</span></label>
+                                <input x-model="formData.email" type="email" placeholder="ex. jean.dupont@entreprise.fr" autocomplete="off"
+                                       style="width:100%;padding:10px 14px;border:2px solid var(--border-color);border-radius:var(--border-radius);font-size:.95rem;font-family:monospace;"
+                                       onfocus="this.style.borderColor='var(--primary-color)'" onblur="this.style.borderColor='var(--border-color)'">
+                            </div>
+                            <div>
+                                <label style="font-size:.85rem;color:var(--text-light);display:block;margin-bottom:6px;font-weight:600;">Département</label>
+                                <input x-model="formData.department" type="text" placeholder="ex. IT, Network, Security" autocomplete="off"
+                                       style="width:100%;padding:10px 14px;border:2px solid var(--border-color);border-radius:var(--border-radius);font-size:.95rem;"
+                                       onfocus="this.style.borderColor='var(--primary-color)'" onblur="this.style.borderColor='var(--border-color)'">
+                            </div>
+                            <div>
+                                <label style="font-size:.85rem;color:var(--text-light);display:block;margin-bottom:6px;font-weight:600;">Téléphone</label>
+                                <input x-model="formData.phone" type="text" placeholder="ex. +33 6 12 34 56 78" autocomplete="off"
+                                       style="width:100%;padding:10px 14px;border:2px solid var(--border-color);border-radius:var(--border-radius);font-size:.95rem;font-family:monospace;"
+                                       onfocus="this.style.borderColor='var(--primary-color)'" onblur="this.style.borderColor='var(--border-color)'">
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- 2. Rôle & Statut --}}
+                    <div style="background:linear-gradient(135deg,#fef3c7,#fde68a);padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--warning-color);">
+                        <h4 style="color:#92400e;margin:0 0 16px;display:flex;align-items:center;gap:8px;">
+                            <i class="fas fa-shield-alt"></i> Rôle & Accès
+                        </h4>
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;">
+                            <div>
+                                <label style="font-size:.85rem;color:#92400e;display:block;margin-bottom:6px;font-weight:600;">Rôle <span style="color:var(--danger-color);">*</span></label>
+                                <select x-model="formData.role"
+                                        style="width:100%;padding:10px 14px;border:2px solid #f59e0b;border-radius:var(--border-radius);background:white;font-size:.95rem;cursor:pointer;"
+                                        onfocus="this.style.borderColor='#92400e'" onblur="this.style.borderColor='#f59e0b'">
+                                    <option value="admin">👑 Administrateur</option>
+                                    <option value="agent">🔧 Agent</option>
+                                    <option value="viewer">👁 Lecteur</option>
+                                </select>
+                                <div style="margin-top:8px;padding:8px 12px;border-radius:8px;font-size:.8rem;font-weight:500;"
+                                     :style="{ background: formData.role==='admin' ? '#fee2e2' : formData.role==='agent' ? '#fef3c7' : '#e0e7ff', color: formData.role==='admin' ? '#991b1b' : formData.role==='agent' ? '#92400e' : '#3730a3' }">
+                                    <i class="fas" :class="formData.role==='admin' ? 'fa-crown' : formData.role==='agent' ? 'fa-user-cog' : 'fa-eye'"></i>
+                                    <span x-text="formData.role==='admin' ? 'Accès complet : création, modification, suppression de tous les équipements et utilisateurs.' : formData.role==='agent' ? 'Peut créer et modifier les équipements. Ne peut pas gérer les utilisateurs.' : 'Lecture seule. Aucune modification possible.'"></span>
+                                </div>
+                            </div>
+                            <div>
+                                <label style="font-size:.85rem;color:#92400e;display:block;margin-bottom:6px;font-weight:600;">Statut du compte</label>
+                                <div style="display:flex;gap:16px;align-items:center;padding-top:6px;">
+                                    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:600;padding:10px 16px;border-radius:var(--border-radius);border:2px solid;transition:all .2s;"
+                                           :style="{ borderColor:formData.is_active?'var(--success-color)':'var(--border-color)', background:formData.is_active?'#d1fae5':'white', color:formData.is_active?'#065f46':'var(--text-light)' }">
+                                        <input type="radio" x-model="formData.is_active" :value="true" style="accent-color:var(--success-color);width:16px;height:16px;">
+                                        <span><i class="fas fa-check-circle"></i> Actif</span>
+                                    </label>
+                                    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:600;padding:10px 16px;border-radius:var(--border-radius);border:2px solid;transition:all .2s;"
+                                           :style="{ borderColor:!formData.is_active?'var(--danger-color)':'var(--border-color)', background:!formData.is_active?'#fee2e2':'white', color:!formData.is_active?'#991b1b':'var(--text-light)' }">
+                                        <input type="radio" x-model="formData.is_active" :value="false" style="accent-color:var(--danger-color);width:16px;height:16px;">
+                                        <span><i class="fas fa-times-circle"></i> Inactif</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- 3. Mot de passe --}}
+                    <div style="background:#f0fdf4;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--success-color);">
+                        <h4 style="color:var(--success-color);margin:0 0 6px;display:flex;align-items:center;gap:8px;">
+                            <i class="fas fa-lock"></i> Mot de passe
+                            <span x-show="modalData.id" style="font-size:.8rem;font-weight:400;color:var(--text-light);margin-left:4px;">(laisser vide pour conserver l'actuel)</span>
+                        </h4>
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:12px;">
+                            <div x-data="{ show: false }">
+                                <label style="font-size:.85rem;color:var(--text-light);display:block;margin-bottom:6px;font-weight:600;">Mot de passe <span x-show="!modalData.id" style="color:var(--danger-color);">*</span></label>
+                                <div style="position:relative;">
+                                    <input x-model="formData.password" :type="show?'text':'password'" placeholder="••••••••••••" autocomplete="new-password"
+                                           style="width:100%;padding:10px 40px 10px 14px;border:2px solid var(--border-color);border-radius:var(--border-radius);font-family:monospace;font-size:.95rem;"
+                                           onfocus="this.style.borderColor='var(--success-color)'" onblur="this.style.borderColor='var(--border-color)'">
+                                    <button type="button" @click="show=!show" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-light);">
+                                        <i class="fas" :class="show?'fa-eye-slash':'fa-eye'"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div x-data="{ show: false }">
+                                <label style="font-size:.85rem;color:var(--text-light);display:block;margin-bottom:6px;font-weight:600;">Confirmation <span x-show="!modalData.id" style="color:var(--danger-color);">*</span></label>
+                                <div style="position:relative;">
+                                    <input x-model="formData.password_confirmation" :type="show?'text':'password'" placeholder="••••••••••••" autocomplete="new-password"
+                                           style="width:100%;padding:10px 40px 10px 14px;border:2px solid var(--border-color);border-radius:var(--border-radius);font-family:monospace;font-size:.95rem;"
+                                           onfocus="this.style.borderColor='var(--success-color)'" onblur="this.style.borderColor='var(--border-color)'">
+                                    <button type="button" @click="show=!show" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-light);">
+                                        <i class="fas" :class="show?'fa-eye-slash':'fa-eye'"></i>
+                                    </button>
+                                </div>
+                                <div x-show="formData.password_confirmation"
+                                     style="margin-top:6px;font-size:.78rem;font-weight:600;display:flex;align-items:center;gap:4px;"
+                                     :style="{ color: formData.password===formData.password_confirmation ? 'var(--success-color)' : 'var(--danger-color)' }">
+                                    <i class="fas" :class="formData.password===formData.password_confirmation ? 'fa-check-circle' : 'fa-times-circle'"></i>
+                                    <span x-text="formData.password===formData.password_confirmation ? 'Les mots de passe correspondent' : 'Les mots de passe ne correspondent pas'"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </template>
             {{-- ══════════════════════════════════════════════════════════
                  FORMULAIRE ÉQUIPEMENT (switch / router / firewall)
                  ══════════════════════════════════════════════════════════ --}}
-            <template x-if="modalData.type !== 'site'"><div style="display:contents;">
+            <template x-if="modalData.type !== 'site' && modalData.type !== 'user'">
+                <div style="display:contents;">
 
             {{-- ① Informations générales --}}
             <div style="background:#f8fafc;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--primary-color);">
@@ -1177,7 +1291,6 @@
         <div style="padding:24px;" x-html="renderEquipmentDetails()"></div>
         <div style="padding:20px 24px;border-top:2px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;background:#f8fafc;border-radius:0 0 var(--border-radius-lg) var(--border-radius-lg);">
             <div style="display:flex;gap:10px;">
-                <button class="btn btn-outline btn-sm" @click="testConnectivity(modalData.type,modalData.item?.id);closeModal('equipmentDetailsModal')"><i class="fas fa-plug"></i> Tester</button>
                 <template x-if="modalData.type==='switch'"><button class="btn btn-outline btn-sm" @click="configurePorts(modalData.item?.id);closeModal('equipmentDetailsModal')"><i class="fas fa-cog"></i> Configurer ports</button></template>
                 <template x-if="modalData.type==='router'"><button class="btn btn-outline btn-sm" @click="updateInterfaces(modalData.item?.id);closeModal('equipmentDetailsModal')"><i class="fas fa-ethernet"></i> Interfaces</button></template>
                 <template x-if="modalData.type==='firewall'"><button class="btn btn-outline btn-sm" @click="updateSecurityPolicies(modalData.item?.id);closeModal('equipmentDetailsModal')"><i class="fas fa-shield-alt"></i> Politiques</button></template>
@@ -1191,123 +1304,381 @@
 </div>
 
 
-{{-- ══════════════════════════════════════════════════════════════════════
-     MODAL 3 : TEST DE CONNECTIVITÉ
-     ══════════════════════════════════════════════════════════════════════ --}}
-<div id="testConnectivityModal" x-show="currentModal === 'test'" x-cloak style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);z-index:1000;display:flex;align-items:center;justify-content:center;">
-    <div style="background:white;border-radius:var(--border-radius-lg);width:92%;max-width:640px;max-height:90vh;overflow-y:auto;box-shadow:var(--card-shadow-hover);animation:fadeIn .3s ease;">
-        <div :style="{ background: modalData.type==='switch'?'linear-gradient(135deg,#0ea5e9,#0284c7)':modalData.type==='router'?'linear-gradient(135deg,#10b981,#059669)':'linear-gradient(135deg,#ef4444,#dc2626)' }"
-             style="padding:24px;display:flex;justify-content:space-between;align-items:center;color:white;border-radius:var(--border-radius-lg) var(--border-radius-lg) 0 0;">
-            <h3 style="margin:0;font-size:1.4rem;display:flex;align-items:center;gap:12px;">
-                <i class="fas" :class="modalData.type==='switch'?'fa-exchange-alt':modalData.type==='router'?'fa-route':modalData.type==='firewall'?'fa-fire':'fa-plug'"></i>
-                <span x-text="modalTitle"></span>
-            </h3>
-            <button @click="closeModal('testConnectivityModal')" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:1.5rem;width:40px;height:40px;border-radius:50%;cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'"><i class="fas fa-times"></i></button>
-        </div>
-        <div style="padding:24px;display:grid;gap:16px;">
-            <div style="background:#f8fafc;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--primary-color);text-align:center;">
-                <div style="font-size:2.5rem;margin-bottom:12px;" :style="{color:modalData.type==='switch'?'var(--primary-color)':modalData.type==='router'?'var(--success-color)':'var(--danger-color)'}">
-                    <i class="fas" :class="modalData.type==='switch'?'fa-exchange-alt':modalData.type==='router'?'fa-route':modalData.type==='firewall'?'fa-fire':'fa-server'"></i>
-                </div>
-                <div style="font-weight:700;font-size:1.15rem;" x-text="modalData.item?.name||'Équipement'"></div>
-                <div style="color:var(--text-light);font-size:.85rem;margin-top:4px;"><span x-text="modalData.item?.model||''"></span><span x-show="modalData.item?.site"> · <span x-text="modalData.item?.site"></span></span></div>
-            </div>
-            <div x-html="renderTestResults()"></div>
-        </div>
-        <div style="padding:20px 24px;border-top:2px solid var(--border-color);display:flex;justify-content:flex-end;gap:12px;background:#f8fafc;border-radius:0 0 var(--border-radius-lg) var(--border-radius-lg);">
-            <button class="btn btn-outline" @click="closeModal('testConnectivityModal')"><i class="fas fa-times"></i> Fermer</button>
-            <button class="btn btn-primary" @click="testConnectivity(modalData.type,modalData.item?.id)"><i class="fas fa-redo"></i> Relancer</button>
-        </div>
-    </div>
-</div>
-
-
 {{-- MODAL 4 : PORTS --}}
-<div id="configurePortsModal" x-show="currentModal === 'configurePorts'" x-cloak style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);z-index:1000;display:flex;align-items:center;justify-content:center;">
-    <div style="background:white;border-radius:var(--border-radius-lg);width:92%;max-width:760px;max-height:90vh;overflow-y:auto;box-shadow:var(--card-shadow-hover);animation:fadeIn .3s ease;">
-        <div style="padding:24px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,var(--success-color),#059669);color:white;border-radius:var(--border-radius-lg) var(--border-radius-lg) 0 0;">
-            <h3 style="margin:0;font-size:1.4rem;display:flex;align-items:center;gap:12px;"><i class="fas fa-cog"></i><span x-text="modalTitle"></span></h3>
-            <button @click="closeModal('configurePortsModal')" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:1.5rem;width:40px;height:40px;border-radius:50%;cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'"><i class="fas fa-times"></i></button>
-        </div>
-        <div style="padding:24px;display:grid;gap:24px;">
-            <div style="background:#f0fdf4;padding:16px;border-radius:var(--border-radius);border-left:4px solid var(--success-color);display:flex;align-items:center;gap:16px;">
-                <div style="font-size:2rem;color:var(--success-color);"><i class="fas fa-exchange-alt"></i></div>
-                <div><div style="font-weight:700;font-size:1.1rem;" x-text="modalData.item?.name||'Switch'"></div><div style="color:var(--text-light);font-size:.85rem;margin-top:4px;"><span x-text="modalData.item?.ports_used||0"></span> / <span x-text="modalData.item?.ports_total||0"></span> ports utilisés · <span x-text="modalData.item?.site||'N/A'"></span></div></div>
-            </div>
-            <div style="background:#f8fafc;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--success-color);">
-                <h4 style="color:var(--success-color);margin:0 0 16px;display:flex;align-items:center;gap:8px;"><i class="fas fa-upload"></i> Charger un fichier de configuration</h4>
-                <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-                    <input type="file" accept=".json,application/json" id="portConfigFile" style="flex:1;padding:8px;border:2px solid var(--border-color);border-radius:var(--border-radius);">
-                    <button class="btn btn-primary" style="background:linear-gradient(135deg,var(--success-color),#059669);" @click="uploadPortConfig()"><i class="fas fa-file-upload"></i> Charger</button>
+<div id="configurePortsModal" x-show="currentModal === 'configurePorts'" x-cloak
+     style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;">
+    <div style="background:white;border-radius:var(--border-radius-lg);width:100%;max-width:800px;max-height:90vh;overflow-y:auto;box-shadow:0 25px 60px rgba(0,0,0,0.3);animation:fadeIn .25s ease;">
+
+        {{-- Header --}}
+        <div style="padding:20px 24px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,#059669,#047857);color:white;border-radius:var(--border-radius-lg) var(--border-radius-lg) 0 0;position:sticky;top:0;z-index:1;">
+            <div style="display:flex;align-items:center;gap:12px;">
+                <div style="width:40px;height:40px;background:rgba(255,255,255,0.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;">
+                    <i class="fas fa-network-wired"></i>
+                </div>
+                <div>
+                    <h3 style="margin:0;font-size:1.2rem;font-weight:700;" x-text="modalTitle"></h3>
+                    <p style="margin:2px 0 0;font-size:.8rem;opacity:.8;">Configuration des ports du switch</p>
                 </div>
             </div>
-            <div style="background:#f8fafc;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--success-color);">
-                <h4 style="color:var(--success-color);margin:0 0 12px;display:flex;align-items:center;gap:8px;"><i class="fas fa-code"></i> Configuration actuelle <span style="font-weight:400;font-size:.8rem;color:var(--text-light);">(JSON)</span></h4>
-                <pre style="background:white;padding:12px;border:2px solid var(--border-color);border-radius:var(--border-radius);font-family:monospace;font-size:.85rem;overflow-x:auto;white-space:pre-wrap;max-height:300px;" x-text="formData.portConfiguration||'Aucune configuration chargée'"></pre>
-            </div>
+            <button @click="closeModal('configurePortsModal')"
+                    style="background:rgba(255,255,255,0.15);border:none;color:white;width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:1.1rem;transition:background .2s;"
+                    onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                    onmouseout="this.style.background='rgba(255,255,255,0.15)'">
+                <i class="fas fa-times"></i>
+            </button>
         </div>
-        <div style="padding:20px 24px;border-top:2px solid var(--border-color);display:flex;justify-content:flex-end;gap:12px;background:#f8fafc;border-radius:0 0 var(--border-radius-lg) var(--border-radius-lg);">
-            <button class="btn btn-outline" @click="closeModal('configurePortsModal')"><i class="fas fa-times"></i> Annuler</button>
-            <button class="btn btn-primary" style="background:linear-gradient(135deg,var(--success-color),#059669);" @click="savePortConfiguration()"><i class="fas fa-save"></i> Appliquer</button>
+
+        <div style="padding:24px;display:grid;gap:20px;">
+
+            {{-- Bandeau infos switch --}}
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">
+                <div style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);padding:14px 16px;border-radius:10px;border:1px solid #6ee7b7;text-align:center;">
+                    <div style="font-size:1.6rem;font-weight:800;color:#059669;" x-text="modalData.item?.ports_total||0"></div>
+                    <div style="font-size:.78rem;color:#065f46;font-weight:600;margin-top:2px;">Ports total</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);padding:14px 16px;border-radius:10px;border:1px solid #93c5fd;text-align:center;">
+                    <div style="font-size:1.6rem;font-weight:800;color:#2563eb;" x-text="modalData.item?.ports_used||0"></div>
+                    <div style="font-size:.78rem;color:#1e40af;font-weight:600;margin-top:2px;">Ports utilisés</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);padding:14px 16px;border-radius:10px;border:1px solid #86efac;text-align:center;">
+                    <div style="font-size:1.6rem;font-weight:800;color:#16a34a;"
+                         x-text="(modalData.item?.ports_total||0) - (modalData.item?.ports_used||0)"></div>
+                    <div style="font-size:.78rem;color:#15803d;font-weight:600;margin-top:2px;">Ports libres</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#fafafa,#f4f4f5);padding:14px 16px;border-radius:10px;border:1px solid #d4d4d8;text-align:center;">
+                    <div style="font-size:1rem;font-weight:700;color:#3f3f46;" x-text="modalData.item?.site||'N/A'"></div>
+                    <div style="font-size:.78rem;color:#71717a;font-weight:600;margin-top:2px;">Site</div>
+                </div>
+            </div>
+
+            {{-- Barre de progression utilisation --}}
+            <div style="background:#f8fafc;padding:16px 20px;border-radius:10px;border:1px solid var(--border-color);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <span style="font-size:.85rem;font-weight:600;color:var(--text-light);">Taux d'utilisation</span>
+                    <span style="font-size:.9rem;font-weight:700;color:#059669;"
+                          x-text="modalData.item?.ports_total ? Math.round((modalData.item.ports_used/modalData.item.ports_total)*100)+'%' : '0%'"></span>
+                </div>
+                <div style="background:#e2e8f0;border-radius:99px;height:8px;overflow:hidden;">
+                    <div style="height:100%;border-radius:99px;transition:width .4s ease;background:linear-gradient(90deg,#059669,#10b981);"
+                         :style="{ width: modalData.item?.ports_total ? Math.min((modalData.item.ports_used/modalData.item.ports_total)*100, 100)+'%' : '0%' }"></div>
+                </div>
+            </div>
+
+            {{-- Import fichier --}}
+            <div style="background:#f8fafc;padding:20px;border-radius:10px;border:1px solid var(--border-color);">
+                <h4 style="color:#059669;margin:0 0 14px;display:flex;align-items:center;gap:8px;font-size:.95rem;">
+                    <i class="fas fa-file-upload"></i> Importer une configuration
+                </h4>
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                    <label style="flex:1;min-width:200px;cursor:pointer;">
+                        <div style="padding:10px 14px;border:2px dashed #6ee7b7;border-radius:8px;background:#ecfdf5;text-align:center;color:#059669;font-size:.85rem;font-weight:600;transition:all .2s;"
+                             onmouseover="this.style.borderColor='#059669'" onmouseout="this.style.borderColor='#6ee7b7'">
+                            <i class="fas fa-file-code" style="margin-right:6px;"></i>
+                            <span id="portConfigFileName">Choisir un fichier (.txt, .json)…</span>
+                        </div>
+                        <input type="file" accept=".txt,.json,text/plain,application/json" id="portConfigFile" style="display:none;"
+                               onchange="document.getElementById('portConfigFileName').textContent = this.files[0]?.name || 'Choisir un fichier (.txt, .json)…'">
+                    </label>
+                    <button class="btn btn-primary"
+                            style="background:linear-gradient(135deg,#059669,#047857);white-space:nowrap;"
+                            @click="uploadPortConfig()">
+                        <i class="fas fa-upload"></i> Charger
+                    </button>
+                </div>
+                <p style="margin:10px 0 0;font-size:.78rem;color:var(--text-light);">
+                    <i class="fas fa-info-circle"></i> Formats acceptés : <code style="background:#e2e8f0;padding:1px 5px;border-radius:4px;">.txt</code> (config IOS/HP) ou <code style="background:#e2e8f0;padding:1px 5px;border-radius:4px;">.json</code> — ex. <code style="background:#e2e8f0;padding:1px 5px;border-radius:4px;">[{"port": 1, "vlan": 10}]</code>
+                </p>
+            </div>
+
+            {{-- Configuration actuelle --}}
+            <div style="background:#f8fafc;padding:20px;border-radius:10px;border:1px solid var(--border-color);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <h4 style="color:#059669;margin:0;display:flex;align-items:center;gap:8px;font-size:.95rem;">
+                        <i class="fas fa-code"></i> Configuration chargée
+                    </h4>
+                    <button x-show="formData.portConfiguration"
+                            @click="formData.portConfiguration = ''"
+                            style="background:none;border:none;color:var(--danger-color);cursor:pointer;font-size:.8rem;font-weight:600;padding:4px 8px;border-radius:6px;border:1px solid var(--danger-color);">
+                        <i class="fas fa-trash-alt"></i> Effacer
+                    </button>
+                </div>
+                <pre x-show="formData.portConfiguration"
+                     style="background:white;padding:14px;border:1px solid #d1fae5;border-radius:8px;font-family:'JetBrains Mono',monospace,monospace;font-size:.82rem;overflow-x:auto;white-space:pre-wrap;max-height:240px;color:#065f46;line-height:1.5;"
+                     x-text="formData.portConfiguration"></pre>
+                <div x-show="!formData.portConfiguration"
+                     style="padding:32px;text-align:center;color:var(--text-light);border:2px dashed var(--border-color);border-radius:8px;background:white;">
+                    <i class="fas fa-file-code" style="font-size:2rem;opacity:.3;display:block;margin-bottom:8px;"></i>
+                    Aucune configuration chargée
+                </div>
+            </div>
+
+        </div>
+
+        {{-- Footer --}}
+        <div style="padding:16px 24px;border-top:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;background:#f8fafc;border-radius:0 0 var(--border-radius-lg) var(--border-radius-lg);">
+            <span style="font-size:.8rem;color:var(--text-light);">
+                <i class="fas fa-info-circle"></i> Les modifications seront appliquées immédiatement sur le switch
+            </span>
+            <div style="display:flex;gap:10px;">
+                <button class="btn btn-outline" @click="closeModal('configurePortsModal')">
+                    <i class="fas fa-times"></i> Annuler
+                </button>
+                <button class="btn btn-primary"
+                        style="background:linear-gradient(135deg,#059669,#047857);"
+                        :disabled="!formData.portConfiguration"
+                        :style="{ opacity: formData.portConfiguration ? 1 : 0.5 }"
+                        @click="savePortConfiguration()">
+                    <i class="fas fa-save"></i> Appliquer la configuration
+                </button>
+            </div>
         </div>
     </div>
 </div>
 
 
 {{-- MODAL 5 : INTERFACES --}}
-<div id="updateInterfacesModal" x-show="currentModal === 'updateInterfaces'" x-cloak style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);z-index:1000;display:flex;align-items:center;justify-content:center;">
-    <div style="background:white;border-radius:var(--border-radius-lg);width:92%;max-width:760px;max-height:90vh;overflow-y:auto;box-shadow:var(--card-shadow-hover);animation:fadeIn .3s ease;">
-        <div style="padding:24px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,#10b981,#059669);color:white;border-radius:var(--border-radius-lg) var(--border-radius-lg) 0 0;">
-            <h3 style="margin:0;font-size:1.4rem;display:flex;align-items:center;gap:12px;"><i class="fas fa-ethernet"></i><span x-text="modalTitle"></span></h3>
-            <button @click="closeModal('updateInterfacesModal')" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:1.5rem;width:40px;height:40px;border-radius:50%;cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'"><i class="fas fa-times"></i></button>
-        </div>
-        <div style="padding:24px;display:grid;gap:24px;">
-            <div style="background:#f0fdf4;padding:16px;border-radius:var(--border-radius);border-left:4px solid #10b981;display:flex;align-items:center;gap:16px;">
-                <div style="font-size:2rem;color:#10b981;"><i class="fas fa-route"></i></div>
-                <div><div style="font-weight:700;font-size:1.1rem;" x-text="modalData.item?.name||'Routeur'"></div><div style="color:var(--text-light);font-size:.85rem;"><span x-text="modalData.item?.interfaces_up_count||0"></span>/<span x-text="modalData.item?.interfaces_count||0"></span> interfaces actives</div></div>
+<div id="updateInterfacesModal" x-show="currentModal === 'updateInterfaces'" x-cloak
+     style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;">
+    <div style="background:white;border-radius:var(--border-radius-lg);width:100%;max-width:800px;max-height:90vh;overflow-y:auto;box-shadow:0 25px 60px rgba(0,0,0,0.3);animation:fadeIn .25s ease;">
+
+        {{-- Header --}}
+        <div style="padding:20px 24px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,#0891b2,#0e7490);color:white;border-radius:var(--border-radius-lg) var(--border-radius-lg) 0 0;position:sticky;top:0;z-index:1;">
+            <div style="display:flex;align-items:center;gap:12px;">
+                <div style="width:40px;height:40px;background:rgba(255,255,255,0.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;">
+                    <i class="fas fa-cog"></i>
+                </div>
+                <div>
+                    <h3 style="margin:0;font-size:1.2rem;font-weight:700;" x-text="modalTitle"></h3>
+                    <p style="margin:2px 0 0;font-size:.8rem;opacity:.8;">Configuration du routeur</p>
+                </div>
             </div>
-            <div style="background:#f8fafc;padding:20px;border-radius:var(--border-radius);border-left:4px solid #10b981;">
-                <h4 style="color:#10b981;margin:0 0 12px;"><i class="fas fa-code"></i> Configuration des interfaces <span style="font-weight:400;font-size:.8rem;color:var(--text-light);">(JSON)</span></h4>
-                <textarea x-model="formData.interfacesConfig" rows="12" placeholder='[{"interface":"GigabitEthernet0/0","status":"up","ip":"192.168.1.1","mask":"255.255.255.0","description":"LAN"}]'
-                          style="width:100%;padding:12px 14px;border:2px solid var(--border-color);border-radius:var(--border-radius);font-family:monospace;font-size:.85rem;resize:vertical;"
-                          onfocus="this.style.borderColor='#10b981'" onblur="this.style.borderColor='var(--border-color)'"></textarea>
-            </div>
+            <button @click="closeModal('updateInterfacesModal')"
+                    style="background:rgba(255,255,255,0.15);border:none;color:white;width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:1.1rem;transition:background .2s;"
+                    onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                    onmouseout="this.style.background='rgba(255,255,255,0.15)'">
+                <i class="fas fa-times"></i>
+            </button>
         </div>
-        <div style="padding:20px 24px;border-top:2px solid var(--border-color);display:flex;justify-content:flex-end;gap:12px;background:#f8fafc;border-radius:0 0 var(--border-radius-lg) var(--border-radius-lg);">
-            <button class="btn btn-outline" @click="closeModal('updateInterfacesModal')"><i class="fas fa-times"></i> Annuler</button>
-            <button class="btn btn-primary" style="background:linear-gradient(135deg,#10b981,#059669);" @click="saveInterfacesUpdate()"><i class="fas fa-save"></i> Appliquer</button>
+
+        <div style="padding:24px;display:grid;gap:20px;">
+
+            {{-- Stats routeur --}}
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">
+                <div style="background:linear-gradient(135deg,#ecfeff,#cffafe);padding:14px 16px;border-radius:10px;border:1px solid #67e8f9;text-align:center;">
+                    <div style="font-size:1.6rem;font-weight:800;color:#0891b2;" x-text="modalData.item?.interfaces_count||0"></div>
+                    <div style="font-size:.78rem;color:#164e63;font-weight:600;margin-top:2px;">Total interfaces</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);padding:14px 16px;border-radius:10px;border:1px solid #6ee7b7;text-align:center;">
+                    <div style="font-size:1.6rem;font-weight:800;color:#059669;" x-text="modalData.item?.interfaces_up_count||0"></div>
+                    <div style="font-size:.78rem;color:#065f46;font-weight:600;margin-top:2px;">Interfaces UP</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#fef2f2,#fee2e2);padding:14px 16px;border-radius:10px;border:1px solid #fca5a5;text-align:center;">
+                    <div style="font-size:1.6rem;font-weight:800;color:#dc2626;"
+                         x-text="(modalData.item?.interfaces_count||0) - (modalData.item?.interfaces_up_count||0)"></div>
+                    <div style="font-size:.78rem;color:#991b1b;font-weight:600;margin-top:2px;">Interfaces DOWN</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#fafafa,#f4f4f5);padding:14px 16px;border-radius:10px;border:1px solid #d4d4d8;text-align:center;">
+                    <div style="font-size:.95rem;font-weight:700;color:#3f3f46;" x-text="modalData.item?.site||'N/A'"></div>
+                    <div style="font-size:.78rem;color:#71717a;font-weight:600;margin-top:2px;">Site</div>
+                </div>
+            </div>
+
+            {{-- Import fichier .txt ou .json --}}
+            <div style="background:#f8fafc;padding:20px;border-radius:10px;border:1px solid var(--border-color);">
+                <h4 style="color:#0891b2;margin:0 0 14px;display:flex;align-items:center;gap:8px;font-size:.95rem;">
+                    <i class="fas fa-file-upload"></i> Importer un fichier de configuration
+                </h4>
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                    <label style="flex:1;min-width:200px;cursor:pointer;">
+                        <div style="padding:10px 14px;border:2px dashed #67e8f9;border-radius:8px;background:#ecfeff;text-align:center;color:#0891b2;font-size:.85rem;font-weight:600;transition:all .2s;"
+                             onmouseover="this.style.borderColor='#0891b2'" onmouseout="this.style.borderColor='#67e8f9'">
+                            <i class="fas fa-file-code" style="margin-right:6px;"></i>
+                            <span id="routerConfigFileName">Choisir un fichier (.txt, .json)…</span>
+                        </div>
+                        <input type="file" accept=".txt,.json,text/plain,application/json"
+                               id="routerConfigFile" style="display:none;"
+                               onchange="document.getElementById('routerConfigFileName').textContent = this.files[0]?.name || 'Choisir un fichier (.txt, .json)…'">
+                    </label>
+                    <button class="btn btn-primary"
+                            style="background:linear-gradient(135deg,#0891b2,#0e7490);white-space:nowrap;"
+                            @click="uploadRouterConfig()">
+                        <i class="fas fa-upload"></i> Charger
+                    </button>
+                </div>
+                <p style="margin:10px 0 0;font-size:.78rem;color:var(--text-light);">
+                    <i class="fas fa-info-circle"></i>
+                    Formats acceptés : <code style="background:#e2e8f0;padding:1px 5px;border-radius:4px;">.txt</code> (Cisco IOS, etc.) ou
+                    <code style="background:#e2e8f0;padding:1px 5px;border-radius:4px;">.json</code>
+                </p>
+            </div>
+
+            {{-- Saisie / affichage configuration --}}
+            <div style="background:#f8fafc;padding:20px;border-radius:10px;border:1px solid var(--border-color);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <h4 style="color:#0891b2;margin:0;font-size:.95rem;display:flex;align-items:center;gap:8px;">
+                        <i class="fas fa-code"></i> Configuration
+                        <span x-show="formData.routerConfigType"
+                              style="font-size:.75rem;font-weight:500;padding:2px 8px;border-radius:20px;background:#cffafe;color:#0e7490;"
+                              x-text="formData.routerConfigType === 'json' ? '● JSON' : '● Texte'"></span>
+                    </h4>
+                    <button x-show="formData.interfacesConfig"
+                            @click="formData.interfacesConfig = ''; formData.routerConfigType = ''"
+                            style="background:none;border:none;color:var(--danger-color);cursor:pointer;font-size:.8rem;font-weight:600;padding:4px 8px;border-radius:6px;border:1px solid var(--danger-color);">
+                        <i class="fas fa-eraser"></i> Vider
+                    </button>
+                </div>
+                <textarea x-model="formData.interfacesConfig" rows="12"
+                          placeholder="Collez ici la configuration ou importez un fichier…&#10;&#10;Exemples :&#10;  - Cisco IOS : interface GigabitEthernet0/0 / ip address 192.168.1.1 255.255.255.0&#10;  - JSON      : [{&quot;interface&quot;:&quot;Gi0/0&quot;,&quot;status&quot;:&quot;up&quot;,&quot;ip&quot;:&quot;192.168.1.1&quot;}]"
+                          style="width:100%;padding:12px 14px;border:2px solid var(--border-color);border-radius:8px;font-family:'JetBrains Mono',monospace,monospace;font-size:.82rem;resize:vertical;line-height:1.6;transition:border-color .2s;"
+                          onfocus="this.style.borderColor='#0891b2'" onblur="this.style.borderColor='var(--border-color)'"></textarea>
+            </div>
+
+        </div>
+
+        {{-- Footer --}}
+        <div style="padding:16px 24px;border-top:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;background:#f8fafc;border-radius:0 0 var(--border-radius-lg) var(--border-radius-lg);">
+            <span style="font-size:.8rem;color:var(--text-light);">
+                <i class="fas fa-exclamation-triangle" style="color:var(--warning-color);"></i> Vérifier la configuration avant d'appliquer
+            </span>
+            <div style="display:flex;gap:10px;">
+                <button class="btn btn-outline" @click="closeModal('updateInterfacesModal')">
+                    <i class="fas fa-times"></i> Annuler
+                </button>
+                <button class="btn btn-primary"
+                        style="background:linear-gradient(135deg,#0891b2,#0e7490);"
+                        :disabled="!formData.interfacesConfig"
+                        :style="{ opacity: formData.interfacesConfig ? 1 : 0.5 }"
+                        @click="saveInterfacesUpdate()">
+                    <i class="fas fa-save"></i> Appliquer la configuration
+                </button>
+            </div>
         </div>
     </div>
 </div>
 
 
 {{-- MODAL 6 : POLITIQUES --}}
-<div id="updateSecurityPoliciesModal" x-show="currentModal === 'updateSecurityPolicies'" x-cloak style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);z-index:1000;display:flex;align-items:center;justify-content:center;">
-    <div style="background:white;border-radius:var(--border-radius-lg);width:92%;max-width:760px;max-height:90vh;overflow-y:auto;box-shadow:var(--card-shadow-hover);animation:fadeIn .3s ease;">
-        <div style="padding:24px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,var(--danger-color),#dc2626);color:white;border-radius:var(--border-radius-lg) var(--border-radius-lg) 0 0;">
-            <h3 style="margin:0;font-size:1.4rem;display:flex;align-items:center;gap:12px;"><i class="fas fa-shield-alt"></i><span x-text="modalTitle"></span></h3>
-            <button @click="closeModal('updateSecurityPoliciesModal')" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:1.5rem;width:40px;height:40px;border-radius:50%;cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'"><i class="fas fa-times"></i></button>
-        </div>
-        <div style="padding:24px;display:grid;gap:24px;">
-            <div style="background:#fef2f2;padding:16px;border-radius:var(--border-radius);border-left:4px solid var(--danger-color);display:flex;align-items:center;gap:16px;">
-                <div style="font-size:2rem;color:var(--danger-color);"><i class="fas fa-fire"></i></div>
-                <div><div style="font-weight:700;font-size:1.1rem;" x-text="modalData.item?.name||'Firewall'"></div><div style="color:var(--text-light);font-size:.85rem;"><span x-text="modalData.item?.security_policies_count||0"></span> règles actives</div></div>
-            </div>
-            <div style="background:#f8fafc;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--danger-color);">
-                <h4 style="color:var(--danger-color);margin:0 0 16px;"><i class="fas fa-upload"></i> Charger un fichier</h4>
-                <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-                    <input type="file" accept=".json,application/json" id="securityPoliciesFile" style="flex:1;padding:8px;border:2px solid var(--border-color);border-radius:var(--border-radius);">
-                    <button class="btn btn-primary" style="background:linear-gradient(135deg,var(--danger-color),#dc2626);" @click="uploadSecurityPolicies()"><i class="fas fa-file-upload"></i> Charger</button>
+<div id="updateSecurityPoliciesModal" x-show="currentModal === 'updateSecurityPolicies'" x-cloak
+     style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;">
+    <div style="background:white;border-radius:var(--border-radius-lg);width:100%;max-width:800px;max-height:90vh;overflow-y:auto;box-shadow:0 25px 60px rgba(0,0,0,0.3);animation:fadeIn .25s ease;">
+
+        {{-- Header --}}
+        <div style="padding:20px 24px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,#dc2626,#b91c1c);color:white;border-radius:var(--border-radius-lg) var(--border-radius-lg) 0 0;position:sticky;top:0;z-index:1;">
+            <div style="display:flex;align-items:center;gap:12px;">
+                <div style="width:40px;height:40px;background:rgba(255,255,255,0.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <div>
+                    <h3 style="margin:0;font-size:1.2rem;font-weight:700;" x-text="modalTitle"></h3>
+                    <p style="margin:2px 0 0;font-size:.8rem;opacity:.8;">Gestion des politiques de sécurité</p>
                 </div>
             </div>
-            <div style="background:#f8fafc;padding:20px;border-radius:var(--border-radius);border-left:4px solid var(--danger-color);">
-                <h4 style="color:var(--danger-color);margin:0 0 12px;"><i class="fas fa-code"></i> Politiques actuelles <span style="font-weight:400;font-size:.8rem;color:var(--text-light);">(JSON)</span></h4>
-                <pre style="background:white;padding:12px;border:2px solid var(--border-color);border-radius:var(--border-radius);font-family:monospace;font-size:.85rem;overflow-x:auto;white-space:pre-wrap;max-height:300px;" x-text="formData.securityPolicies||'Aucune politique chargée'"></pre>
-            </div>
+            <button @click="closeModal('updateSecurityPoliciesModal')"
+                    style="background:rgba(255,255,255,0.15);border:none;color:white;width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:1.1rem;transition:background .2s;"
+                    onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                    onmouseout="this.style.background='rgba(255,255,255,0.15)'">
+                <i class="fas fa-times"></i>
+            </button>
         </div>
-        <div style="padding:20px 24px;border-top:2px solid var(--border-color);display:flex;justify-content:flex-end;gap:12px;background:#f8fafc;border-radius:0 0 var(--border-radius-lg) var(--border-radius-lg);">
-            <button class="btn btn-outline" @click="closeModal('updateSecurityPoliciesModal')"><i class="fas fa-times"></i> Annuler</button>
-            <button class="btn btn-primary" style="background:linear-gradient(135deg,var(--danger-color),#dc2626);" @click="saveSecurityPolicies()"><i class="fas fa-save"></i> Appliquer</button>
+
+        <div style="padding:24px;display:grid;gap:20px;">
+
+            {{-- Stats firewall --}}
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">
+                <div style="background:linear-gradient(135deg,#fef2f2,#fee2e2);padding:14px 16px;border-radius:10px;border:1px solid #fca5a5;text-align:center;">
+                    <div style="font-size:1.6rem;font-weight:800;color:#dc2626;" x-text="modalData.item?.security_policies_count||0"></div>
+                    <div style="font-size:.78rem;color:#991b1b;font-weight:600;margin-top:2px;">Règles actives</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#fff7ed,#fed7aa);padding:14px 16px;border-radius:10px;border:1px solid #fdba74;text-align:center;">
+                    <div style="font-size:1rem;font-weight:700;color:#ea580c;" x-text="modalData.item?.brand||'N/A'"></div>
+                    <div style="font-size:.78rem;color:#9a3412;font-weight:600;margin-top:2px;">Fabricant</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#fafafa,#f4f4f5);padding:14px 16px;border-radius:10px;border:1px solid #d4d4d8;text-align:center;">
+                    <div style="font-size:.95rem;font-weight:700;color:#3f3f46;" x-text="modalData.item?.site||'N/A'"></div>
+                    <div style="font-size:.78rem;color:#71717a;font-weight:600;margin-top:2px;">Site</div>
+                </div>
+                <div style="padding:14px 16px;border-radius:10px;text-align:center;border:1px solid;"
+                     :style="{ background: modalData.item?.status==='active' ? 'linear-gradient(135deg,#ecfdf5,#d1fae5)' : 'linear-gradient(135deg,#fef2f2,#fee2e2)', borderColor: modalData.item?.status==='active' ? '#6ee7b7' : '#fca5a5' }">
+                    <div style="font-size:.9rem;font-weight:700;"
+                         :style="{ color: modalData.item?.status==='active' ? '#059669' : '#dc2626' }"
+                         x-text="modalData.item?.status==='active' ? '✓ Actif' : '✕ Inactif'"></div>
+                    <div style="font-size:.78rem;font-weight:600;margin-top:2px;color:#6b7280;">Statut</div>
+                </div>
+            </div>
+
+            {{-- Alerte sécurité --}}
+            <div style="background:#fef9c3;padding:12px 16px;border-radius:8px;border-left:4px solid #eab308;display:flex;align-items:flex-start;gap:10px;">
+                <i class="fas fa-exclamation-triangle" style="color:#ca8a04;margin-top:2px;flex-shrink:0;"></i>
+                <p style="margin:0;font-size:.82rem;color:#713f12;line-height:1.5;">
+                    <strong>Attention :</strong> La modification des politiques de sécurité peut impacter le trafic réseau en production.
+                    Assurez-vous de valider votre configuration avant d'appliquer.
+                </p>
+            </div>
+
+            {{-- Import fichier --}}
+            <div style="background:#f8fafc;padding:20px;border-radius:10px;border:1px solid var(--border-color);">
+                <h4 style="color:#dc2626;margin:0 0 14px;display:flex;align-items:center;gap:8px;font-size:.95rem;">
+                    <i class="fas fa-file-upload"></i> Importer un fichier de politiques
+                </h4>
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                    <label style="flex:1;min-width:200px;cursor:pointer;">
+                        <div style="padding:10px 14px;border:2px dashed #fca5a5;border-radius:8px;background:#fef2f2;text-align:center;color:#dc2626;font-size:.85rem;font-weight:600;transition:all .2s;"
+                             onmouseover="this.style.borderColor='#dc2626'" onmouseout="this.style.borderColor='#fca5a5'">
+                            <i class="fas fa-file-shield" style="margin-right:6px;"></i>
+                            <span id="secPolFileName">Choisir un fichier (.txt, .json)…</span>
+                        </div>
+                        <input type="file" accept=".txt,.json,text/plain,application/json" id="securityPoliciesFile" style="display:none;"
+                               onchange="document.getElementById('secPolFileName').textContent = this.files[0]?.name || 'Choisir un fichier (.txt, .json)…'">
+                    </label>
+                    <button class="btn btn-primary"
+                            style="background:linear-gradient(135deg,#dc2626,#b91c1c);white-space:nowrap;"
+                            @click="uploadSecurityPolicies()">
+                        <i class="fas fa-upload"></i> Charger
+                    </button>
+                </div>
+            </div>
+
+            {{-- Politiques actuelles --}}
+            <div style="background:#f8fafc;padding:20px;border-radius:10px;border:1px solid var(--border-color);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <h4 style="color:#dc2626;margin:0;font-size:.95rem;display:flex;align-items:center;gap:8px;">
+                        <i class="fas fa-list-alt"></i> Politiques chargées
+                    </h4>
+                    <button x-show="formData.securityPolicies"
+                            @click="formData.securityPolicies = ''"
+                            style="background:none;border:none;color:var(--danger-color);cursor:pointer;font-size:.8rem;font-weight:600;padding:4px 8px;border-radius:6px;border:1px solid var(--danger-color);">
+                        <i class="fas fa-trash-alt"></i> Effacer
+                    </button>
+                </div>
+                <pre x-show="formData.securityPolicies"
+                     style="background:white;padding:14px;border:1px solid #fecaca;border-radius:8px;font-family:'JetBrains Mono',monospace,monospace;font-size:.82rem;overflow-x:auto;white-space:pre-wrap;max-height:260px;color:#7f1d1d;line-height:1.5;"
+                     x-text="formData.securityPolicies"></pre>
+                <div x-show="!formData.securityPolicies"
+                     style="padding:32px;text-align:center;color:var(--text-light);border:2px dashed var(--border-color);border-radius:8px;background:white;">
+                    <i class="fas fa-shield-alt" style="font-size:2rem;opacity:.3;display:block;margin-bottom:8px;"></i>
+                    Aucune politique chargée
+                </div>
+            </div>
+
+        </div>
+
+        {{-- Footer --}}
+        <div style="padding:16px 24px;border-top:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;background:#f8fafc;border-radius:0 0 var(--border-radius-lg) var(--border-radius-lg);">
+            <span style="font-size:.8rem;color:var(--text-light);">
+                <i class="fas fa-lock" style="color:#dc2626;"></i> Action sensible — impact sur le trafic réseau
+            </span>
+            <div style="display:flex;gap:10px;">
+                <button class="btn btn-outline" @click="closeModal('updateSecurityPoliciesModal')">
+                    <i class="fas fa-times"></i> Annuler
+                </button>
+                <button class="btn btn-primary"
+                        style="background:linear-gradient(135deg,#dc2626,#b91c1c);"
+                        :disabled="!formData.securityPolicies"
+                        :style="{ opacity: formData.securityPolicies ? 1 : 0.5 }"
+                        @click="saveSecurityPolicies()">
+                    <i class="fas fa-save"></i> Appliquer les politiques
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -1329,6 +1700,61 @@
         <div style="padding:20px 24px;border-top:2px solid var(--border-color);display:flex;justify-content:flex-end;gap:12px;background:#f8fafc;border-radius:0 0 var(--border-radius-lg) var(--border-radius-lg);">
             <button class="btn btn-outline" @click="closeModal('toggleUserStatusModal')"><i class="fas fa-times"></i> Annuler</button>
             <button class="btn btn-primary" style="background:linear-gradient(135deg,var(--warning-color),#d97706);" @click="confirmToggleUserStatus()"><i class="fas fa-check"></i> Confirmer</button>
+        </div>
+    </div>
+</div>
+
+
+{{-- MODAL SUPPRESSION --}}
+<div id="confirmDeleteModal"
+     x-show="currentModal === 'confirmDelete'" x-cloak
+     style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.65);z-index:1100;display:flex;align-items:center;justify-content:center;padding:16px;">
+    <div style="background:white;border-radius:var(--border-radius-lg);width:100%;max-width:480px;box-shadow:0 25px 60px rgba(0,0,0,0.35);animation:fadeIn .2s ease;"
+         @click.stop>
+
+        {{-- Header rouge --}}
+        <div style="padding:20px 24px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,#dc2626,#b91c1c);color:white;border-radius:var(--border-radius-lg) var(--border-radius-lg) 0 0;">
+            <div style="display:flex;align-items:center;gap:12px;">
+                <div style="width:38px;height:38px;background:rgba(255,255,255,0.2);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:1.15rem;">
+                    <i class="fas fa-trash-alt"></i>
+                </div>
+                <h3 style="margin:0;font-size:1.1rem;font-weight:700;">Confirmer la suppression</h3>
+            </div>
+            <button @click="closeModal('confirmDeleteModal')"
+                    style="background:rgba(255,255,255,0.15);border:none;color:white;width:34px;height:34px;border-radius:8px;cursor:pointer;font-size:1rem;"
+                    onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                    onmouseout="this.style.background='rgba(255,255,255,0.15)'">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        {{-- Corps --}}
+        <div style="padding:28px 24px;text-align:center;">
+            <div style="width:64px;height:64px;background:#fee2e2;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:1.8rem;color:#dc2626;">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <p style="font-size:1rem;color:#374151;margin:0 0 8px;">
+                Êtes-vous sûr de vouloir supprimer le
+                <strong x-text="deleteTarget?.label"></strong>
+            </p>
+            <p style="font-size:1.2rem;font-weight:700;color:#111827;margin:0 0 16px;"
+               x-text="deleteTarget?.name"></p>
+            <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:8px;">
+                <i class="fas fa-exclamation-circle" style="color:#dc2626;flex-shrink:0;"></i>
+                <span style="font-size:.82rem;color:#991b1b;">Cette action est <strong>irréversible</strong>. Toutes les données associées seront perdues.</span>
+            </div>
+        </div>
+
+        {{-- Footer --}}
+        <div style="padding:16px 24px;border-top:1px solid #f3f4f6;display:flex;justify-content:flex-end;gap:10px;background:#f9fafb;border-radius:0 0 var(--border-radius-lg) var(--border-radius-lg);">
+            <button class="btn btn-outline" @click="closeModal('confirmDeleteModal')">
+                <i class="fas fa-times"></i> Annuler
+            </button>
+            <button class="btn btn-primary"
+                    style="background:linear-gradient(135deg,#dc2626,#b91c1c);"
+                    @click="confirmDelete()">
+                <i class="fas fa-trash-alt"></i> Supprimer définitivement
+            </button>
         </div>
     </div>
 </div>
