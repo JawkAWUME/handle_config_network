@@ -5,8 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Firewall;
 use App\Services\FirewallService;
 use App\Exports\FirewallExport;
-use App\Http\Requests\Firewall\StoreFirewallRequest;
-use App\Http\Requests\Firewall\UpdateFirewallRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Maatwebsite\Excel\Facades\Excel;
@@ -61,8 +59,7 @@ class FirewallController extends Controller
             $limit = $request->input('limit', 10);
 
             $query = Firewall::query()
-                ->with(['site:id,name'])
-                ->withCount(['securityPolicies']);
+                ->with(['site:id,name']);
 
             if ($search) {
                 $query->where(function ($q) use ($search) {
@@ -94,24 +91,7 @@ class FirewallController extends Controller
 
             $firewalls = $query->orderBy('name')->limit($limit)->get();
             
-            $formattedFirewalls = $firewalls->map(function ($firewall) {
-                return [
-                    'id' => $firewall->id,
-                    'name' => $firewall->name,
-                    'model' => $firewall->model,
-                    'site' => $firewall->site ? [
-                        'id' => $firewall->site->id,
-                        'name' => $firewall->site->name
-                    ] : null,
-                    'firewall_type' => $firewall->firewall_type,
-                    'ip_nms' => $firewall->ip_nms,
-                    'ip_service' => $firewall->ip_service,
-                    'status' => $firewall->status,
-                    'security_policies_count' => $firewall->security_policies_count,
-                    'created_at' => $firewall->created_at->format('Y-m-d H:i:s'),
-                    'updated_at' => $firewall->updated_at->format('Y-m-d H:i:s'),
-                ];
-            });
+            $formattedFirewalls = $firewalls->map(fn($firewall) => $this->formatFirewall($firewall));
 
             return response()->json([
                 'success' => true,
@@ -227,18 +207,50 @@ class FirewallController extends Controller
     /**
      * Créer un firewall (JSON)
      */
-    public function store(StoreFirewallRequest $request)
+    public function store(Request $request)
     {
+        Gate::authorize('create', Firewall::class);
+
+        $validated = $request->validate([
+            'name'                     => 'required|string|max:255',
+            'site_id'                  => 'nullable|integer|exists:sites,id',
+            'brand'                    => 'nullable|string|max:100',
+            'model'                    => 'nullable|string|max:100',
+            'firewall_type'            => 'nullable|string|in:palo_alto,fortinet,cisco_asa,checkpoint,other',
+            'ip_nms'                   => 'nullable|string|max:45',
+            'ip_service'               => 'nullable|string|max:45',
+            'vlan_nms'                 => 'nullable|integer|min:1|max:4094',
+            'vlan_service'             => 'nullable|integer|min:1|max:4094',
+            'username'                 => 'nullable|string|max:100',
+            'password'                 => 'nullable|string|max:255',
+            'enable_password'          => 'nullable|string|max:255',
+            'firmware_version'         => 'nullable|string|max:50',
+            'serial_number'            => 'nullable|string|max:100',
+            'asset_tag'                => 'nullable|string|max:100',
+            'security_policies_count'  => 'nullable|integer|min:0',
+            'cpu'                      => 'nullable|integer|min:0|max:100',
+            'memory'                   => 'nullable|integer|min:0|max:100',
+            'high_availability'        => 'nullable|boolean',
+            'monitoring_enabled'       => 'nullable|boolean',
+            'status'                   => 'nullable|string|in:active,warning,danger',
+            'configuration'            => 'nullable|string',
+            'notes'                    => 'nullable|string',
+        ]);
+
+        // Convertir statut string → booléen pour la BDD
+        if (isset($validated['status'])) {
+            $validated['status'] = $validated['status'] === 'active';
+        }
+
         try {
-            $firewall = $this->firewallService->createFirewall($request->validated());
-            
+            $firewall = Firewall::create($validated);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Firewall créé avec succès',
-                'data' => $firewall,
-                'redirect' => route('firewalls.show', $firewall->id)
+                'data'    => $this->formatFirewall($firewall->load('site')),
             ], 201);
-                
+
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -250,17 +262,50 @@ class FirewallController extends Controller
     /**
      * Mettre à jour un firewall (JSON)
      */
-    public function update(UpdateFirewallRequest $request, $id)
+    public function update(Request $request, $id)
     {
+        $firewall = Firewall::findOrFail($id);
+        Gate::authorize('update', $firewall);
+
+        $validated = $request->validate([
+            'name'                     => 'sometimes|required|string|max:255',
+            'site_id'                  => 'nullable|integer|exists:sites,id',
+            'brand'                    => 'nullable|string|max:100',
+            'model'                    => 'nullable|string|max:100',
+            'firewall_type'            => 'nullable|string|in:palo_alto,fortinet,cisco_asa,checkpoint,other',
+            'ip_nms'                   => 'nullable|string|max:45',
+            'ip_service'               => 'nullable|string|max:45',
+            'vlan_nms'                 => 'nullable|integer|min:1|max:4094',
+            'vlan_service'             => 'nullable|integer|min:1|max:4094',
+            'username'                 => 'nullable|string|max:100',
+            'password'                 => 'nullable|string|max:255',
+            'enable_password'          => 'nullable|string|max:255',
+            'firmware_version'         => 'nullable|string|max:50',
+            'serial_number'            => 'nullable|string|max:100',
+            'asset_tag'                => 'nullable|string|max:100',
+            'security_policies_count'  => 'nullable|integer|min:0',
+            'cpu'                      => 'nullable|integer|min:0|max:100',
+            'memory'                   => 'nullable|integer|min:0|max:100',
+            'high_availability'        => 'nullable|boolean',
+            'monitoring_enabled'       => 'nullable|boolean',
+            'status'                   => 'nullable|string|in:active,warning,danger',
+            'configuration'            => 'nullable|string',
+            'notes'                    => 'nullable|string',
+        ]);
+
+        if (isset($validated['status'])) {
+            $validated['status'] = $validated['status'] === 'active';
+        }
+
         try {
-            $firewall = $this->firewallService->updateFirewall($id, $request->validated());
-            
+            $firewall->update($validated);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Firewall mis à jour avec succès',
-                'data' => $firewall
+                'data'    => $this->formatFirewall($firewall->fresh()->load('site')),
             ]);
-                
+
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -291,5 +336,38 @@ class FirewallController extends Controller
                 'message' => 'Erreur lors de la suppression : ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Formater un firewall pour la réponse JSON (compatible frontend Alpine)
+     */
+    private function formatFirewall(Firewall $fw): array
+    {
+        $toStatus = fn($v) => ($v === true || $v == 1) ? 'active' : 'danger';
+        return [
+            'id'                       => $fw->id,
+            'name'                     => $fw->name,
+            'brand'                    => $fw->brand,
+            'model'                    => $fw->model,
+            'firewall_type'            => $fw->firewall_type,
+            'status'                   => $toStatus($fw->status),
+            'username'                 => $fw->username,
+            'ip_nms'                   => $fw->ip_nms,
+            'ip_service'               => $fw->ip_service,
+            'vlan_nms'                 => $fw->vlan_nms,
+            'vlan_service'             => $fw->vlan_service,
+            'firmware_version'         => $fw->firmware_version,
+            'security_policies_count'  => $fw->security_policies_count ?? (is_array($fw->security_policies) ? count($fw->security_policies) : 0),
+            'cpu'                      => $fw->cpu ?? 0,
+            'memory'                   => $fw->memory ?? 0,
+            'high_availability'        => (bool) $fw->high_availability,
+            'monitoring_enabled'       => (bool) $fw->monitoring_enabled,
+            'serial_number'            => $fw->serial_number,
+            'asset_tag'                => $fw->asset_tag,
+            'notes'                    => $fw->notes,
+            'updated_at'               => $fw->updated_at?->toISOString(),
+            'site'                     => $fw->site?->name ?? 'N/A',
+            'site_id'                  => $fw->site_id,
+        ];
     }
 }

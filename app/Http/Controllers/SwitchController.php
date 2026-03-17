@@ -5,8 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\SwitchModel;
 use App\Services\SwitchService;
 use App\Exports\SwitchExport;
-use App\Http\Requests\Switch\StoreSwitchRequest;
-use App\Http\Requests\Switch\UpdateSwitchRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Maatwebsite\Excel\Facades\Excel;
@@ -306,18 +304,43 @@ class SwitchController extends Controller
     /**
      * Créer un switch (JSON)
      */
-    public function store(StoreSwitchRequest $request)
+    public function store(Request $request)
     {
         Gate::authorize('create', SwitchModel::class);
 
+        $validated = $request->validate([
+            'name'             => 'required|string|max:255',
+            'site_id'          => 'nullable|integer|exists:sites,id',
+            'brand'            => 'nullable|string|max:100',
+            'model'            => 'nullable|string|max:100',
+            'serial_number'    => 'nullable|string|max:100',
+            'firmware_version' => 'nullable|string|max:50',
+            'asset_tag'        => 'nullable|string|max:100',
+            'ip_nms'           => 'nullable|string|max:45',
+            'ip_service'       => 'nullable|string|max:45',
+            'vlan_nms'         => 'nullable|integer|min:1|max:4094',
+            'vlan_service'     => 'nullable|integer|min:1|max:4094',
+            'username'         => 'nullable|string|max:100',
+            'password'         => 'nullable|string|max:255',
+            'ports_total'      => 'nullable|integer|min:1',
+            'ports_used'       => 'nullable|integer|min:0',
+            'status'           => 'nullable|string|in:active,warning,danger',
+            'configuration'    => 'nullable|string',
+            'notes'            => 'nullable|string',
+        ]);
+
+        // Convertir le statut string → booléen pour la BDD
+        if (isset($validated['status'])) {
+            $validated['status'] = $validated['status'] === 'active';
+        }
+
         try {
-            $switch = $this->switchService->createSwitch($request->validated());
+            $switch = SwitchModel::create($validated);
             
             return response()->json([
                 'success' => true,
                 'message' => 'Switch créé avec succès',
-                'data' => $switch,
-                'redirect' => route('switches.show', $switch->id)
+                'data'    => $this->formatSwitch($switch->load('site')),
             ], 201);
                 
         } catch (\Exception $e) {
@@ -331,18 +354,44 @@ class SwitchController extends Controller
     /**
      * Mettre à jour un switch (JSON)
      */
-    public function update(UpdateSwitchRequest $request, $id)
+    public function update(Request $request, $id)
     {
         $switch = SwitchModel::findOrFail($id);
         Gate::authorize('update', $switch);
 
+        $validated = $request->validate([
+            'name'             => 'sometimes|required|string|max:255',
+            'site_id'          => 'nullable|integer|exists:sites,id',
+            'brand'            => 'nullable|string|max:100',
+            'model'            => 'nullable|string|max:100',
+            'serial_number'    => 'nullable|string|max:100',
+            'firmware_version' => 'nullable|string|max:50',
+            'asset_tag'        => 'nullable|string|max:100',
+            'ip_nms'           => 'nullable|string|max:45',
+            'ip_service'       => 'nullable|string|max:45',
+            'vlan_nms'         => 'nullable|integer|min:1|max:4094',
+            'vlan_service'     => 'nullable|integer|min:1|max:4094',
+            'username'         => 'nullable|string|max:100',
+            'password'         => 'nullable|string|max:255',
+            'ports_total'      => 'nullable|integer|min:1',
+            'ports_used'       => 'nullable|integer|min:0',
+            'status'           => 'nullable|string|in:active,warning,danger',
+            'configuration'    => 'nullable|string',
+            'notes'            => 'nullable|string',
+        ]);
+
+        // Convertir le statut string → booléen pour la BDD
+        if (isset($validated['status'])) {
+            $validated['status'] = $validated['status'] === 'active';
+        }
+
         try {
-            $updatedSwitch = $this->switchService->updateSwitch($id, $request->validated());
+            $switch->update($validated);
             
             return response()->json([
                 'success' => true,
                 'message' => 'Switch mis à jour avec succès',
-                'data' => $updatedSwitch
+                'data'    => $this->formatSwitch($switch->fresh()->load('site')),
             ]);
                 
         } catch (\Exception $e) {
@@ -375,5 +424,36 @@ class SwitchController extends Controller
                 'message' => 'Erreur lors de la suppression : ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Formater un switch pour la réponse JSON (compatible avec le frontend Alpine)
+     */
+    private function formatSwitch(SwitchModel $sw): array
+    {
+        $toStatus = fn($status) => ($status === true || $status == 1) ? 'active' : 'danger';
+        return [
+            'id'               => $sw->id,
+            'name'             => $sw->name,
+            'brand'            => $sw->brand,
+            'model'            => $sw->model,
+            'status'           => $toStatus($sw->status),
+            'username'         => $sw->username,
+            'ip_nms'           => $sw->ip_nms,
+            'ip_service'       => $sw->ip_service,
+            'vlan_nms'         => $sw->vlan_nms,
+            'vlan_service'     => $sw->vlan_service,
+            'ports_total'      => $sw->ports_total,
+            'ports_used'       => $sw->ports_used,
+            'vlans'            => $sw->vlan_nms ?? 0,
+            'serial_number'    => $sw->serial_number,
+            'firmware_version' => $sw->firmware_version,
+            'asset_tag'        => $sw->asset_tag,
+            'configuration'    => $sw->configuration,
+            'notes'            => $sw->notes,
+            'updated_at'       => $sw->updated_at?->toISOString(),
+            'site'             => $sw->site?->name ?? 'N/A',
+            'site_id'          => $sw->site_id,
+        ];
     }
 }

@@ -48,9 +48,9 @@
                 </button>
                 @endcan
 
-                <a href="{{ route('api.switches.export') }}" class="btn btn-outline">
+                <!-- <a href="{{ route('api.switches.export') }}" class="btn btn-outline">
                     <i class="fas fa-download"></i> Exporter
-                </a>
+                </a> -->
             </div>
         </div>
 
@@ -120,17 +120,29 @@
 
                             <td>
                                 <div class="action-buttons">
-                                    {{-- viewItem() → ouvre equipmentDetailsModal --}}
+                                    {{-- Voir --}}
                                     <button class="btn btn-outline btn-sm btn-icon"
-                                            title="Voir"
+                                            title="Voir le détail"
                                             @click="viewItem('switches', sw.id)">
                                         <i class="fas fa-eye"></i>
                                     </button>
+                                    {{-- Modifier --}}
+                                    @can('create', App\Models\SwitchModel::class)
+                                    <button class="btn btn-outline btn-sm btn-icon"
+                                            title="Modifier"
+                                            @click="editItem('switches', sw.id)">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    @endcan
+                                    {{-- Configurer ports --}}
+                                    @can('create', App\Models\SwitchModel::class)
                                     <button class="btn btn-outline btn-sm btn-icon"
                                             title="Configurer les ports"
                                             @click="configurePorts(sw.id)">
                                         <i class="fas fa-cog"></i>
                                     </button>
+                                    @endcan
+                                    {{-- Supprimer --}}
                                     @can('delete', App\Models\SwitchModel::class)
                                     <button class="btn btn-outline btn-sm btn-icon"
                                             title="Supprimer"

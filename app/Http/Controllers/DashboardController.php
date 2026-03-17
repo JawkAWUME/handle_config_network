@@ -178,7 +178,10 @@ class DashboardController extends Controller
             'availability' => 99.7,
             'avgUptime'    => 45,
         ];
+<<<<<<< HEAD
 
+=======
+>>>>>>> 1cf0ed699ed853c71591f8d1c6535623739730c9
         // Disponibilité hebdomadaire basée sur le pourcentage d'équipements actifs
         $totalDevices  = $totals['devices'];
         $activeDevices = $onlineStats['firewalls'] + $onlineStats['routers'] + $onlineStats['switches'];
@@ -223,7 +226,10 @@ class DashboardController extends Controller
         foreach ($loadVariations['switch'] as $var) {
             $loadData['switches'][] = max(0, min(100, $switchLoadAvg + $var));
         }
+<<<<<<< HEAD
 
+=======
+>>>>>>> 1cf0ed699ed853c71591f8d1c6535623739730c9
         // 9. Chart data
         $chartData = [
             'deviceDistribution' => [
@@ -243,8 +249,22 @@ class DashboardController extends Controller
         $recentRouters   = $this->getRecentModels(Router::class);
         $recentFirewalls = $this->getRecentModels(Firewall::class);
         $recentBackups   = Backup::latest()->limit(5)->get();
+<<<<<<< HEAD
 
         // 11. Utilisateurs (admins uniquement)
+=======
+        // ════════════════════════════════════════════════════════════
+        // 11. Utilisateurs (admin uniquement)
+        //
+        // ✅ FIX 2 — select() ciblé, limit(500), pas de champ 'password'
+        // ✅ FIX 3 — comptages via SQL indépendants de la collection
+        // ✅ FIX 5 — whereIn(['agent','technician']) pour couvrir les deux
+        //            valeurs BDD possibles (rétro-compatibilité)
+        // ✅ FIX 4 — (bool) cast explicite sur is_active avant @json()
+        //            Car même avec le cast Eloquent, on veut être sûr
+        //            que le JSON contient true/false et non 0/1.
+        // ════════════════════════════════════════════════════════════
+>>>>>>> 1cf0ed699ed853c71591f8d1c6535623739730c9
         $usersForJs = [];
         $userTotals = [];
 
@@ -272,7 +292,10 @@ class DashboardController extends Controller
                 'viewers' => $allUsers->where('role', 'viewer')->count(),
             ];
         }
+<<<<<<< HEAD
 
+=======
+>>>>>>> 1cf0ed699ed853c71591f8d1c6535623739730c9
         // 12. Permissions
         $can = [
             'create'          => Gate::allows('create', Site::class),
@@ -289,6 +312,11 @@ class DashboardController extends Controller
             'id'                => $s->id,
             'name'              => $s->name,
             'code'              => $s->code,
+<<<<<<< HEAD
+=======
+            'description'       => $s->description,
+            'code'              => $s->code,              // ← ajouté
+>>>>>>> 1cf0ed699ed853c71591f8d1c6535623739730c9
             'address'           => $s->address,
             'postal_code'       => $s->postal_code,
             'city'              => $s->city,
@@ -296,7 +324,20 @@ class DashboardController extends Controller
             'technical_contact' => $s->technical_contact,
             'technical_email'   => $s->technical_email,
             'phone'             => $s->phone,
+<<<<<<< HEAD
             'description'       => $s->description,
+=======
+            'contact_name'      => $s->technical_contact,
+            'contact_email'     => $s->technical_email,
+            'contact_phone'     => $s->phone,
+            'status'            => $s->status,
+            'capacity'          => $s->capacity,
+            'description'       => $s->description,       // ← ajouté
+            'status'            => $s->status,            // ← ajouté
+            'switches_count'    => $s->switches_count,
+            'routers_count'     => $s->routers_count,
+            'firewalls_count'   => $s->firewalls_count,
+>>>>>>> 1cf0ed699ed853c71591f8d1c6535623739730c9
             'notes'             => $s->notes,
             'switches_count'    => $s->switches_count,
             'routers_count'     => $s->routers_count,
@@ -339,6 +380,27 @@ class DashboardController extends Controller
         ));
     }
 
+<<<<<<< HEAD
+=======
+    // ════════════════════════════════════════════════════════════════
+    // Méthodes privées
+    // ════════════════════════════════════════════════════════════════
+
+    private function getWeeklyAvailability(): array
+    {
+        return [99.2, 99.5, 99.8, 99.7, 99.6, 99.9, 99.4];
+    }
+
+    private function getEquipmentLoad(string $type): array
+    {
+        return [
+            'firewall' => [45, 48, 62, 68, 55, 50],
+            'router'   => [60, 58, 72, 78, 65, 62],
+            'switch'   => [40, 42, 55, 58, 48, 45],
+        ][$type] ?? [0, 0, 0, 0, 0, 0];
+    }
+
+>>>>>>> 1cf0ed699ed853c71591f8d1c6535623739730c9
     private function getRecentModels(string $modelClass)
     {
         if (!Gate::allows('viewAny', $modelClass)) {

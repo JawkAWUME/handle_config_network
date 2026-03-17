@@ -3,9 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Site;
+<<<<<<< HEAD
 use App\Models\SwitchModel;
 use App\Models\Router;
 use App\Models\Firewall;
+=======
+>>>>>>> 1cf0ed699ed853c71591f8d1c6535623739730c9
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 
@@ -51,7 +54,11 @@ class SiteController extends Controller
     }
 
     /**
+<<<<<<< HEAD
      * Création d'un site.
+=======
+     * Créer un site (JSON)
+>>>>>>> 1cf0ed699ed853c71591f8d1c6535623739730c9
      */
     public function store(Request $request)
     {
@@ -61,15 +68,22 @@ class SiteController extends Controller
             'name'              => 'required|string|max:255',
             'code'              => 'nullable|string|max:50|unique:sites,code',
             'address'           => 'nullable|string|max:500',
+<<<<<<< HEAD
             'city'              => 'nullable|string|max:255',
             'country'           => 'nullable|string|max:255',
             'postal_code'       => 'nullable|string|max:20',
             'latitude'          => 'nullable|numeric',
             'longitude'         => 'nullable|numeric',
+=======
+            'postal_code'       => 'nullable|string|max:20',
+            'city'              => 'nullable|string|max:255',
+            'country'           => 'nullable|string|max:255',
+>>>>>>> 1cf0ed699ed853c71591f8d1c6535623739730c9
             'technical_contact' => 'nullable|string|max:255',
             'technical_email'   => 'nullable|email|max:255',
             'phone'             => 'nullable|string|max:50',
             'description'       => 'nullable|string',
+<<<<<<< HEAD
             'notes'             => 'nullable|string',
             // Associations équipements (tableaux d'IDs)
             'switches_ids'      => 'nullable|array',
@@ -95,11 +109,44 @@ class SiteController extends Controller
                 $validated['routers_ids']   ?? [],
                 $validated['firewalls_ids'] ?? []
             );
+=======
+            'status'            => 'nullable|string|in:active,maintenance,planned',
+            'capacity'          => 'nullable|integer|min:0',
+            'notes'             => 'nullable|string',
+            'switches_ids'      => 'nullable|array',
+            'switches_ids.*'    => 'integer',
+            'routers_ids'       => 'nullable|array',
+            'routers_ids.*'     => 'integer',
+            'firewalls_ids'     => 'nullable|array',
+            'firewalls_ids.*'   => 'integer',
+        ]);
+
+        try {
+            $site = Site::create($validated);
+
+            // Associer les équipements sélectionnés au nouveau site
+            if (!empty($request->switches_ids)) {
+                \App\Models\SwitchModel::whereIn('id', $request->switches_ids)
+                    ->update(['site_id' => $site->id]);
+            }
+            if (!empty($request->routers_ids)) {
+                \App\Models\Router::whereIn('id', $request->routers_ids)
+                    ->update(['site_id' => $site->id]);
+            }
+            if (!empty($request->firewalls_ids)) {
+                \App\Models\Firewall::whereIn('id', $request->firewalls_ids)
+                    ->update(['site_id' => $site->id]);
+            }
+>>>>>>> 1cf0ed699ed853c71591f8d1c6535623739730c9
 
             return response()->json([
                 'success' => true,
                 'message' => 'Site créé avec succès',
+<<<<<<< HEAD
                 'data'    => $this->formatSite($site->fresh()->loadCount(['switches', 'routers', 'firewalls'])),
+=======
+                'data'    => $site->fresh()->loadCount(['switches', 'routers', 'firewalls']),
+>>>>>>> 1cf0ed699ed853c71591f8d1c6535623739730c9
             ], 201);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Erreur : ' . $e->getMessage()], 500);
@@ -124,15 +171,22 @@ class SiteController extends Controller
             'name'              => 'sometimes|required|string|max:255',
             'code'              => 'nullable|string|max:50|unique:sites,code,' . $id,
             'address'           => 'nullable|string|max:500',
+<<<<<<< HEAD
             'city'              => 'nullable|string|max:255',
             'country'           => 'nullable|string|max:255',
             'postal_code'       => 'nullable|string|max:20',
             'latitude'          => 'nullable|numeric',
             'longitude'         => 'nullable|numeric',
+=======
+            'postal_code'       => 'nullable|string|max:20',
+            'city'              => 'nullable|string|max:255',
+            'country'           => 'nullable|string|max:255',
+>>>>>>> 1cf0ed699ed853c71591f8d1c6535623739730c9
             'technical_contact' => 'nullable|string|max:255',
             'technical_email'   => 'nullable|email|max:255',
             'phone'             => 'nullable|string|max:50',
             'description'       => 'nullable|string',
+<<<<<<< HEAD
             'notes'             => 'nullable|string',
             // Associations équipements
             'switches_ids'      => 'nullable|array',
@@ -141,6 +195,17 @@ class SiteController extends Controller
             'routers_ids.*'     => 'integer|exists:routers,id',
             'firewalls_ids'     => 'nullable|array',
             'firewalls_ids.*'   => 'integer|exists:firewalls,id',
+=======
+            'status'            => 'nullable|string|in:active,maintenance,planned',
+            'capacity'          => 'nullable|integer|min:0',
+            'notes'             => 'nullable|string',
+            'switches_ids'      => 'nullable|array',
+            'switches_ids.*'    => 'integer',
+            'routers_ids'       => 'nullable|array',
+            'routers_ids.*'     => 'integer',
+            'firewalls_ids'     => 'nullable|array',
+            'firewalls_ids.*'   => 'integer',
+>>>>>>> 1cf0ed699ed853c71591f8d1c6535623739730c9
         ]);
 
         try {
@@ -149,6 +214,7 @@ class SiteController extends Controller
                 ->except(['switches_ids', 'routers_ids', 'firewalls_ids'])
                 ->toArray();
 
+<<<<<<< HEAD
             $site->update($siteData);
 
             // Synchroniser les équipements si les tableaux sont présents
@@ -168,6 +234,41 @@ class SiteController extends Controller
                 'success' => true,
                 'message' => 'Site mis à jour',
                 'data'    => $this->formatSite($fresh),
+=======
+            // Mettre à jour les équipements associés
+            if ($request->has('switches_ids')) {
+                \App\Models\SwitchModel::where('site_id', $site->id)
+                    ->whereNotIn('id', $request->switches_ids ?? [])
+                    ->update(['site_id' => null]);
+                if (!empty($request->switches_ids)) {
+                    \App\Models\SwitchModel::whereIn('id', $request->switches_ids)
+                        ->update(['site_id' => $site->id]);
+                }
+            }
+            if ($request->has('routers_ids')) {
+                \App\Models\Router::where('site_id', $site->id)
+                    ->whereNotIn('id', $request->routers_ids ?? [])
+                    ->update(['site_id' => null]);
+                if (!empty($request->routers_ids)) {
+                    \App\Models\Router::whereIn('id', $request->routers_ids)
+                        ->update(['site_id' => $site->id]);
+                }
+            }
+            if ($request->has('firewalls_ids')) {
+                \App\Models\Firewall::where('site_id', $site->id)
+                    ->whereNotIn('id', $request->firewalls_ids ?? [])
+                    ->update(['site_id' => null]);
+                if (!empty($request->firewalls_ids)) {
+                    \App\Models\Firewall::whereIn('id', $request->firewalls_ids)
+                        ->update(['site_id' => $site->id]);
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Site mis à jour avec succès',
+                'data'    => $site->fresh()->loadCount(['switches', 'routers', 'firewalls']),
+>>>>>>> 1cf0ed699ed853c71591f8d1c6535623739730c9
             ]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Erreur : ' . $e->getMessage()], 500);
@@ -251,6 +352,7 @@ class SiteController extends Controller
             Firewall::whereIn('id', $firewallIds)->update(['site_id' => $siteId]);
         }
     }
+<<<<<<< HEAD
 
     /**
      * Formate un site pour la réponse JSON (inclut les IDs des équipements).
@@ -283,4 +385,6 @@ class SiteController extends Controller
             'updated_at'      => $site->updated_at,
         ];
     }
+=======
+>>>>>>> 1cf0ed699ed853c71591f8d1c6535623739730c9
 }

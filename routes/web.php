@@ -4,8 +4,8 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FirewallController;
 use App\Http\Controllers\RouterController;
 use App\Http\Controllers\SwitchController;
-use App\Http\Controllers\AuthController;
 use App\Http\Controllers\SiteController;
+use App\Http\Controllers\AuthController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -14,6 +14,11 @@ use Illuminate\Support\Facades\Route;
 | Routes publiques (guest uniquement)
 |--------------------------------------------------------------------------
 */
+
+// Route légère pour renouveler le token CSRF (utilisée par le frontend après expiration de session)
+Route::get('/csrf-token', function () {
+    return response()->json(['token' => csrf_token()]);
+})->middleware('web');
 
 Route::middleware('guest')->group(function () {
 
@@ -119,6 +124,19 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::get('/sites/export', [SiteController::class, 'export'])->name('sites.export');
+
+    /*
+    |--------------------------------------------------------------------------
+    | API Utilisateurs
+    |--------------------------------------------------------------------------
+    */
+    Route::prefix('api/users')->name('api.users.')->group(function () {
+        Route::get('/',                          [AuthController::class, 'indexUsers'])->name('index');
+        Route::post('/',                         [AuthController::class, 'storeUser'])->name('store');
+        Route::put('/{user}',                    [AuthController::class, 'updateUser'])->name('update');
+        Route::delete('/{user}',                 [AuthController::class, 'destroyUser'])->name('destroy');
+        Route::patch('/{user}/toggle-status',    [AuthController::class, 'toggleUserStatus'])->name('toggle');
+    });
 
 
     /*
