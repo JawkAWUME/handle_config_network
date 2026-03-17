@@ -98,8 +98,7 @@
                                     <button class="btn btn-outline btn-sm btn-icon" title="Modifier" @click="editUser(user)">
                                         <i class="fas fa-edit"></i>
                                     </button>
-                                    <button class="btn btn-outline btn-sm btn-icon"
-                                            title="Activer / Désactiver"
+                                    <button class="btn btn-outline btn-sm btn-icon" title="Activer / Désactiver"
                                             :disabled="user.is_current"
                                             :style="user.is_current ? 'opacity:.4;cursor:not-allowed;' : ''"
                                             @click="!user.is_current && toggleUserStatus(user)">

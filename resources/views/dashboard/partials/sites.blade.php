@@ -4,14 +4,10 @@
     <div class="filters-section">
         <div class="search-box">
             <i class="fas fa-search"></i>
-            {{--
-                CORRECTION : @input.debounce="filterSites" supprimé.
-                filteredSites est un computed getter Alpine → le filtre se met à jour
-                automatiquement via x-model, aucune méthode impérative n'est nécessaire.
-            --}}
             <input type="text"
                    x-model="filters.sites.search"
                    placeholder="Rechercher un site..."  autocomplete="off">
+
         </div>
     </div>
 
@@ -155,6 +151,8 @@
     </section>
 
 </div>
+
+{{-- ⚠️ Le modal de création/édition de site a été SUPPRIMÉ car il est maintenant centralisé dans modals.blade.php --}}
 
 {{-- ════════════════════════════════════════════════════════════
      MODAL : Création / Édition d'un Site

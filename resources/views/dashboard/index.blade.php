@@ -1597,6 +1597,8 @@
                         html += '</div>';
                         return html;
                     },
+    // Ces ajouts doivent être fusionnés dans la définition de dashboardApp() existante.
+    // Voici les nouvelles propriétés et méthodes à intégrer :
             modalSiteEquipmentList: [],
             modalSiteEquipmentType: null,
             modalSiteEquipmentTitle: '',
